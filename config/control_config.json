@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0-event-process-poc",
+  "machine_name": "TwinCAT Zylinder POC",
+  "enabled": true,
+  "min_confidence": 0.85,
+  "max_writes_per_minute": 30,
+  "symbols": [
+    {"symbol":"MAIN.bTasterS1","data_type":"BOOL","role":"sensor","description":"Taster S1","llm_trigger":true,"trigger_mode":"edge"},
+    {"symbol":"MAIN.bZylinderA1Ausfahren","data_type":"BOOL","role":"actuator","description":"Ausfahranforderung Zylinder A1","writable":true,"safe_value":false,"allowed_values":[false,true],"llm_trigger":false,"trigger_mode":"none","expected_feedback":[{"symbol":"MAIN.bZylinderA1Ausgefahren","value":true,"timeout_seconds":5.0}]},
+    {"symbol":"MAIN.bZylinderA1Einfahren","data_type":"BOOL","role":"actuator","description":"Einfahranforderung Zylinder A1","writable":true,"safe_value":false,"allowed_values":[false,true],"llm_trigger":false,"trigger_mode":"none","expected_feedback":[{"symbol":"MAIN.bZylinderA1Eingefahren","value":true,"timeout_seconds":5.0}]},
+    {"symbol":"MAIN.bZylinderA1Ausgefahren","data_type":"BOOL","role":"feedback","description":"Endlage A1 ausgefahren"},
+    {"symbol":"MAIN.bZylinderA1Eingefahren","data_type":"BOOL","role":"feedback","description":"Endlage A1 eingefahren"},
+    {"symbol":"MAIN.bFreigabeKI","data_type":"BOOL","role":"permission","description":"SPS-Freigabe fuer kontrollierten Schreibbetrieb"},
+    {"symbol":"MAIN.bStoerung","data_type":"BOOL","role":"interlock","description":"SPS-Stoerung oder Verriegelung"},
+    {"symbol":"MAIN.eBetriebsart","data_type":"INT","role":"mode","description":"1 = AUTO, 0 = MANUAL"}
+  ],
+  "relations": [
+    {"id":"s1_controls_a1","trigger":{"symbol":"MAIN.bTasterS1","operator":"equals","value":true},"trigger_event":"rising_edge","true_actions":[{"symbol":"MAIN.bZylinderA1Ausfahren","value":true,"reason":"S1 wurde betaetigt"}],"feedback_true":[{"symbol":"MAIN.bZylinderA1Ausgefahren","value":true,"timeout_seconds":5.0}]},
+    {"id":"s1_releases_a1","trigger":{"symbol":"MAIN.bTasterS1","operator":"equals","value":false},"trigger_event":"falling_edge","false_actions":[{"symbol":"MAIN.bZylinderA1Einfahren","value":true,"reason":"S1 wurde losgelassen"}],"feedback_false":[{"symbol":"MAIN.bZylinderA1Eingefahren","value":true,"timeout_seconds":5.0}]}
+  ],
+  "execution": {"required_true":["MAIN.bFreigabeKI"],"required_false":["MAIN.bStoerung"],"mode_symbol":"MAIN.eBetriebsart","allowed_modes":["AUTO"],"mode_values":{"0":"MANUAL","1":"AUTO"}}
+}

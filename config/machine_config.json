@@ -1,0 +1,35 @@
+{
+  "version": "0.1.0-poc",
+  "machine_name": "test",
+  "enabled": true,
+  "min_confidence": 0.85,
+  "max_response_age_seconds": 15,
+  "max_writes_per_minute": 10,
+  "symbols": [
+    {
+      "symbol": ".BAMPELANFORDERN",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "grün anforderung",
+      "writable": false,
+      "allowed_values": null,
+      "expected_feedback": []
+    },
+    {
+      "symbol": ".BTEST",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Testfunktion ob schreiben geht",
+      "writable": true,
+      "allowed_values": null,
+      "expected_feedback": []
+    }
+  ],
+  "execution": {
+    "required_true": [],
+    "required_false": [],
+    "mode_symbol": null,
+    "allowed_modes": [],
+    "mode_values": {}
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080
+  },
+  "ads": {
+    "host": "10.12.57.1",
+    "ams_net_id": "10.12.13.236.1.1",
+    "port": 801,
+    "timeout_seconds": 3.0,
+    "notification_cycle_ms": 100
+  },
+  "llm": {
+    "base_url": "http://127.0.0.1:1234/v1",
+    "model": "gemma-4-12b-it-qat",
+    "timeout_seconds": 120.0,
+    "temperature": 0.1,
+    "max_tokens": 1200,
+    "context_length": 4096
+  }
+}

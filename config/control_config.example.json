@@ -1,0 +1,68 @@
+{
+  "version": "0.1.0-poc",
+  "machine_name": "TwinCAT POC Maschine",
+  "enabled": true,
+  "min_confidence": 0.85,
+  "max_response_age_seconds": 15.0,
+  "max_writes_per_minute": 10,
+  "symbols": [
+    {
+      "symbol": "MAIN.bZylinderA1Ausfahren",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Ausgang zum Ausfahren von Zylinder A1",
+      "writable": true,
+      "allowed_values": [false, true],
+      "expected_feedback": [
+        {
+          "symbol": "MAIN.bZylinderA1Ausgefahren",
+          "value": true,
+          "timeout_seconds": 5.0,
+          "poll_interval_seconds": 0.1
+        }
+      ]
+    },
+    {
+      "symbol": "MAIN.bZylinderA1Eingefahren",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "Rueckmeldung Zylinder A1 eingefahren",
+      "writable": false
+    },
+    {
+      "symbol": "MAIN.bZylinderA1Ausgefahren",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "Rueckmeldung Zylinder A1 ausgefahren",
+      "writable": false
+    },
+    {
+      "symbol": "MAIN.bFreigabeKI",
+      "data_type": "BOOL",
+      "role": "permission",
+      "description": "Explizite SPS-Freigabe fuer den POC-Schreibbetrieb",
+      "writable": false
+    },
+    {
+      "symbol": "MAIN.bStoerung",
+      "data_type": "BOOL",
+      "role": "interlock",
+      "description": "SPS-Stoerung oder Verriegelung",
+      "writable": false
+    },
+    {
+      "symbol": "MAIN.eBetriebsart",
+      "data_type": "INT",
+      "role": "mode",
+      "description": "Betriebsart der Anlage; 1 entspricht AUTO",
+      "writable": false
+    }
+  ],
+  "execution": {
+    "required_true": ["MAIN.bFreigabeKI"],
+    "required_false": ["MAIN.bStoerung"],
+    "mode_symbol": "MAIN.eBetriebsart",
+    "allowed_modes": ["AUTO"],
+    "mode_values": {"0": "MANUAL", "1": "AUTO"}
+  }
+}
