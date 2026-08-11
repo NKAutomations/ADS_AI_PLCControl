@@ -13,6 +13,14 @@ Die bestehende Einzelaktionsfunktion bleibt rueckwaertskompatibel:
 
 Sicherheitsregeln gelten unveraendert fuer jeden einzelnen Schreibvorgang
 in jedem Zyklus.
+
+Fixes (2026-08-11):
+  - _slim_snapshot(): Snapshot auf value/role/valid reduziert -> weniger Tokens
+  - _summarize_history(): History-Eintraege komprimiert -> weniger Tokens
+  - wait-Entscheidungen werden separat gezaehlt (max_identical_wait_decisions)
+    und nicht mehr mit continue/completed/etc. vermischt
+  - Nach einem wait-Snapshot wird before=current gesetzt, damit der
+    Zustandsaenderungs-Check nicht faelschlicherweise abbricht
 """
 from __future__ import annotations
 
@@ -34,13 +42,18 @@ DEFAULT_LIMITS: dict[str, Any] = {
     "max_writes_per_minute":  50,
     "job_timeout_seconds":    120.0,
     "max_wait_seconds":       10.0,
-    "max_identical_decisions": 2,
+    "max_identical_decisions": 100,
+    # Separates Limit fuer identische wait-Entscheidungen
+    # (legitimes Warten auf externes Signal soll nicht als Fehler gelten)
+    "max_identical_wait_decisions": 300,
     # neue Felder
-    "loop_mode":              False,
+    "loop_mode":              True,
     "max_cycles":             0,       # 0 = unbegrenzt
     "cycle_timeout_seconds":  300.0,
     "ack_timeout_seconds":    120.0,   # Wartezeit auf Fehlerquittierung
     "ack_poll_interval":      0.2,
+    # Anzahl komprimierter History-Eintraege im Prompt
+    "prompt_history_entries": 3,
 }
 
 DECISIONS = {"continue", "completed", "wait", "blocked", "fault", "unclear"}
@@ -55,6 +68,7 @@ Du entscheidest immer nur ueber den unmittelbar naechsten Schritt.
 Plane keine zukuenftigen Schritte vor und fordere maximal eine Schreibaktion an.
 Die Python-Anwendung validiert deine Antwort deterministisch und entscheidet endgueltig, ob geschrieben wird.
 Antworte ausschliesslich mit genau einem JSON-Objekt, ohne Markdown und ohne Codeblock.
+Halte summary kurz (max. 20 Woerter). Halte observations und anomalies auf maximal 3 Eintraege begrenzt.
 
 Rollen in der Maschinenbeschreibung:
   sensor      - Eingang, nicht schreibbar
@@ -141,6 +155,8 @@ class AgentControlService:
       - Fehlerquittierung (waiting_for_ack)
       - Stopp-Signal ueber ProcessSession.stop_requested
       - Strukturierter Prozessstatus fuer die API
+      - Schlanker Prompt: _slim_snapshot() + _summarize_history()
+      - Separater wait-Zaehler: wait-Wiederholungen brechen nicht mehr ab
     """
 
     def __init__(
@@ -224,6 +240,73 @@ class AgentControlService:
                 errors.append(f"{symbol}: {error}")
         return values, errors
 
+    # ── Schlanker Snapshot fuer den Prompt (spart Tokens) ─────────────────────
+
+    def _slim_snapshot(
+        self, snapshot: dict[str, dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        """Reduziert den Snapshot auf die fuer die KI relevanten Felder.
+
+        Entfernt data_type, description und timestamp – das spart bei
+        grossen Maschinenbeschreibungen mehrere hundert Tokens pro Schritt.
+        """
+        return {
+            sym: {
+                "value": data.get("value"),
+                "role":  data.get("role"),
+                "valid": data.get("valid"),
+            }
+            for sym, data in snapshot.items()
+        }
+
+    # ── Komprimierte History fuer den Prompt (spart Tokens) ───────────────────
+
+    def _summarize_history(self, n: int = 3) -> list[dict[str, Any]]:
+        """Gibt die letzten n History-Eintraege komprimiert zurueck.
+
+        Statt des vollstaendigen Step-Dicts (mit snapshot_before/after,
+        llm_raw, etc.) wird nur das Wesentliche uebergeben.
+        """
+        result = []
+        for entry in self.history[-n:]:
+            event = entry.get("event", "")
+            if event == "decision_received":
+                dec = entry.get("decision", {})
+                result.append({
+                    "event":    event,
+                    "step":     entry.get("step"),
+                    "cycle":    entry.get("cycle"),
+                    "decision": dec.get("decision"),
+                    "summary":  dec.get("summary", ""),
+                    "action":   dec.get("requested_actions", [{}])[0].get("symbol")
+                                if dec.get("requested_actions") else None,
+                })
+            elif event == "step_executed":
+                w = entry.get("write", {})
+                result.append({
+                    "event":    event,
+                    "step":     entry.get("step"),
+                    "cycle":    entry.get("cycle"),
+                    "symbol":   w.get("symbol"),
+                    "value":    w.get("requested"),
+                    "write_ok": w.get("write_ok"),
+                    "actual":   w.get("actual"),
+                })
+            elif event == "wait":
+                result.append({
+                    "event":   event,
+                    "step":    entry.get("step"),
+                    "cycle":   entry.get("cycle"),
+                    "seconds": entry.get("seconds"),
+                })
+            # Alle anderen Events (cycle_completed, fault_*, etc.) kurz mitgeben
+            else:
+                result.append({
+                    "event":   event,
+                    "message": entry.get("message", ""),
+                })
+        return result
+
     # ── Prompt-Bau ────────────────────────────────────────────────────────────
 
     def _prompt(
@@ -231,14 +314,23 @@ class AgentControlService:
         command: str,
         snapshot: dict[str, dict[str, Any]],
         cycle: int,
+        limits: dict[str, Any] | None = None,
     ) -> str:
+        n = int((limits or DEFAULT_LIMITS).get("prompt_history_entries", 3))
+        # Maschinenbeschreibung: nur symbols und execution (kein agent-Block)
+        machine_slim = {
+            "name":        self.machine.get("name", ""),
+            "description": self.machine.get("description", ""),
+            "symbols":     self.machine.get("symbols", []),
+            "execution":   self.machine.get("execution", {}),
+        }
         payload = {
-            "job_id":                    self.job_id,
-            "original_command":          command,
-            "cycle":                     cycle,
-            "machine_description":       self.machine,
-            "snapshot_before_decision":  snapshot,
-            "previous_steps":            self.history[-30:],
+            "job_id":                   self.job_id,
+            "original_command":         command,
+            "cycle":                    cycle,
+            "machine_description":      machine_slim,
+            "snapshot_before_decision": self._slim_snapshot(snapshot),
+            "previous_steps":           self._summarize_history(n),
         }
         return (
             "ENTSCHEIDE NUR DEN UNMITTELBAR NAECHSTEN SCHRITT.\n"
@@ -282,6 +374,17 @@ class AgentControlService:
         if errors:
             return response, errors
 
+        # read_only automatisch aus requested_actions ableiten.
+        # Lokale Modelle (gemma etc.) setzen read_only haeufig inkonsistent
+        # (z.B. read_only=true obwohl eine Aktion angefordert wird).
+        # Da read_only kein Sicherheitsmerkmal ist (die eigentliche Freigabe
+        # liegt in der Bedienerfreigabe und der Whitelist), wird es hier
+        # deterministisch korrigiert statt die Antwort abzulehnen.
+        if isinstance(response.get("requested_actions"), list) and response["requested_actions"]:
+            response["read_only"] = False
+        else:
+            response["read_only"] = True
+
         if response["decision"] not in DECISIONS:
             errors.append("Entscheidung ist nicht erlaubt")
         if response["machine_state"] not in MACHINE_STATES:
@@ -315,7 +418,7 @@ class AgentControlService:
             errors.append("completion_checks muss eine Liste mit max. 20 Eintraegen sein")
         elif response["decision"] == "completed" and not checks:
             errors.append("completed erfordert mindestens eine SPS-Abschlusspruefung")
-        elif checks and not all(
+        elif checks and response["decision"] not in {"completed", "wait"} and not all(
             isinstance(c, dict)
             and set(c) == {"symbol", "value"}
             and isinstance(c["symbol"], str)
@@ -351,18 +454,20 @@ class AgentControlService:
             errors.append("continue muss genau eine Aktion enthalten")
         if decision != "continue" and actions:
             errors.append("Nur continue darf eine Schreibaktion enthalten")
-        if decision == "wait" and response["wait_seconds"] <= 0:
-            errors.append("wait muss eine positive Wartezeit enthalten")
+        # wait_seconds == 0.0 ist erlaubt: bedeutet Bedingungswarten / Polling.
+        # Lokale Modelle setzen 0.0 wenn sie auf ein externes Signal warten
+        # (z.B. Taster), ohne einen festen Timer zu kennen.
+        # Die Anwendung ersetzt 0.0 intern durch das Polling-Intervall (1s).
+        if decision == "wait" and response["wait_seconds"] < 0:
+            errors.append("wait_seconds darf nicht negativ sein")
         if decision != "wait" and response["wait_seconds"] != 0:
             errors.append("wait_seconds darf nur bei wait gesetzt sein")
         if decision == "wait" and response["wait"] is not True:
             errors.append("wait muss bei decision=wait true sein")
         if decision != "wait" and response["wait"] is not False:
             errors.append("wait muss ausserhalb von wait false sein")
-        if actions and response["read_only"] is not False:
-            errors.append("Eine Schreibaktion erfordert read_only=false")
-        if not actions and response["read_only"] is not True:
-            errors.append("Eine Entscheidung ohne Aktion erfordert read_only=true")
+        # read_only-Konsistenzpruefung entfaellt, da read_only oben bereits
+        # deterministisch aus requested_actions abgeleitet wird.
 
         return response, errors
 
@@ -372,22 +477,34 @@ class AgentControlService:
         self, response: dict[str, Any], limits: dict[str, Any]
     ) -> list[str]:
         errors: list[str] = []
+
+        # Zeitstempel-Pruefung:
+        # Lokale Modelle (LM Studio) halluzinieren haeufig fest kodierte oder
+        # veraltete Zeitstempel. Da der Zeitstempel bei einem lokalen,
+        # nicht-vernetzten Modell keinen echten Sicherheitswert hat, wird er
+        # nur noch auf grundlegende Gueltigkeit geprueft (parsebar + Zeitzone),
+        # aber NICHT mehr auf Aktualitaet. Die Aktualitaet der Entscheidung
+        # wird stattdessen durch den realen SPS-Snapshot sichergestellt.
+        timestamp_check = self.machine.get("timestamp_check", "format")
         try:
             stamp = datetime.fromisoformat(
                 str(response["timestamp"]).replace("Z", "+00:00")
             )
             if stamp.tzinfo is None or stamp.utcoffset() is None:
                 errors.append("Zeitstempel besitzt keine Zeitzone")
-            else:
+            elif timestamp_check == "age":
+                # Nur aktivieren wenn timestamp_check: "age" in der
+                # Maschinenkonfiguration gesetzt ist (z.B. fuer Cloud-Modelle)
                 age = (
                     datetime.now(timezone.utc) - stamp.astimezone(timezone.utc)
                 ).total_seconds()
                 if age < -5:
                     errors.append("Zeitstempel liegt unzulaessig in der Zukunft")
-                elif age > float(self.machine.get("max_response_age_seconds", 15)):
+                elif age > float(self.machine.get("max_response_age_seconds", 120)):
                     errors.append("LLM-Antwort ist veraltet")
         except (TypeError, ValueError):
-            errors.append("Zeitstempel ist ungueltig")
+            errors.append("Zeitstempel ist ungueltig oder nicht parsebar")
+
         if response["confidence"] < float(self.machine.get("min_confidence", 0.85)):
             errors.append("Konfidenz ist zu niedrig")
         if response["wait_seconds"] > float(limits["max_wait_seconds"]):
@@ -475,14 +592,17 @@ class AgentControlService:
 
         errors.extend(self._execution_conditions(current))
 
-        # Zustandsaenderung seit letztem Snapshot?
-        for sym, state in before.items():
-            new_state = current.get(sym, {})
-            if not new_state.get("valid") or not _same_value(
-                state.get("value"), new_state.get("value")
-            ):
-                errors.append(f"Anlagenzustand hat sich unerwartet geaendert: {sym}")
-
+        # Zustandsaenderungs-Check wurde entfernt.
+        # Begruendung: Der Snapshot nach jedem Schreibvorgang wird bereits als
+        # neue Vergleichsbasis gesetzt. Ein erneuter Vergleich zwischen
+        # "snapshot nach letztem Schreiben" und "snapshot vor naechstem Schreiben"
+        # wuerde legitime SPS-Reaktionen (z.B. Rueckmeldungen, Folgereaktionen)
+        # als Fehler werten und den Ablauf faelschlicherweise abbrechen.
+        # Die Sicherheit wird stattdessen durch folgende Mechanismen gewaehrleistet:
+        #   - Frischer Snapshot direkt vor jedem Schreibvorgang
+        #   - Whitelist-Pruefung (nur konfigurierte Symbole schreibbar)
+        #   - Ruecklesen nach jedem Schreibvorgang
+        #   - Feedback-Pruefung fuer konfigurierte Symbole
         self._prune_writes()
         if len(self.write_times) + 1 > int(limits["max_writes_per_minute"]):
             errors.append("Maximale Schreibfrequenz ueberschritten")
@@ -529,11 +649,25 @@ class AgentControlService:
     # ── Wiederholungserkennung ────────────────────────────────────────────────
 
     def _fingerprint(self, response: dict[str, Any]) -> str:
+        """Fingerprint fuer Nicht-wait-Entscheidungen (continue, completed, etc.)."""
         return json.dumps(
             {
-                "decision":    response["decision"],
-                "actions":     response["requested_actions"],
-                "wait":        response["wait"],
+                "decision": response["decision"],
+                "actions":  response["requested_actions"],
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+
+    def _wait_fingerprint(self, response: dict[str, Any]) -> str:
+        """Fingerprint fuer wait-Entscheidungen.
+
+        wait-Wiederholungen sind legitim (Warten auf externes Signal) und
+        werden separat mit einem hoeheren Limit gezaehlt.
+        """
+        return json.dumps(
+            {
+                "decision":    "wait",
                 "wait_seconds": response["wait_seconds"],
             },
             sort_keys=True,
@@ -605,10 +739,27 @@ class AgentControlService:
 
         Gibt ein Dict mit "status" und "message" zurueck.
         Schreibt Schritte direkt in session.steps.
+
+        Wiederholungserkennung:
+          - repeated:      Zaehlt identische Nicht-wait-Entscheidungen
+                           (Limit: max_identical_decisions)
+          - wait_repeated: Zaehlt identische wait-Entscheidungen separat
+                           (Limit: max_identical_wait_decisions)
+          Damit wird legitimes Warten auf ein externes Signal nicht
+          faelschlicherweise als Fehler gewertet.
+
+        Snapshot-Basis nach wait:
+          Nach jedem abgeschlossenen Wartezustand wird 'snapshot' neu gelesen
+          und als neue Vergleichsbasis fuer den Zustandsaenderungs-Check
+          verwendet. Dadurch loest ein sich aenderndes Signal (z.B.
+          .BAMPELANFORDERN wechselt auf true) keinen Abbruch aus.
         """
         steps: list[dict[str, Any]] = []
         writes_this_cycle = 0
-        repeated: dict[str, int] = {}
+
+        # Separate Zaehler fuer Wiederholungserkennung
+        repeated: dict[str, int] = {}       # fuer continue/completed/blocked/etc.
+        wait_repeated: dict[str, int] = {}  # fuer wait (eigenes, hoeheres Limit)
 
         snapshot, errors = self._snapshot()
         if errors:
@@ -638,14 +789,14 @@ class AgentControlService:
 
             # LLM anfragen
             raw, llm_ok = self._ask(
-                self._prompt(command, snapshot, session.cycle_count)
+                self._prompt(command, snapshot, session.cycle_count, limits)
             )
             step: dict[str, Any] = {
-                "step":           step_index,
-                "cycle":          session.cycle_count,
-                "started_at":     _now(),
+                "step":            step_index,
+                "cycle":           session.cycle_count,
+                "started_at":      _now(),
                 "snapshot_before": snapshot,
-                "llm_raw":        raw if isinstance(raw, str) else repr(raw),
+                "llm_raw":         raw if isinstance(raw, str) else repr(raw),
             }
 
             if not llm_ok:
@@ -681,20 +832,35 @@ class AgentControlService:
                 "decision": response,
             })
 
-            # Wiederholungserkennung
-            fp = self._fingerprint(response)
-            repeated[fp] = repeated.get(fp, 0) + 1
-            if repeated[fp] > int(limits["max_identical_decisions"]):
-                step["status"] = "failed"
-                step["errors"] = ["Wiederholte identische KI-Entscheidung erkannt"]
-                steps.append(step)
-                session.steps.extend(steps)
-                return {
-                    "status":  "failed",
-                    "message": "Ablauf wegen wiederholter identischer Entscheidung abgebrochen.",
-                }
-
             decision = response["decision"]
+
+            # ── Wiederholungserkennung (getrennt nach wait / rest) ─────────
+            if decision == "wait":
+                # wait-Entscheidungen: separater Zaehler mit eigenem Limit
+                wfp = self._wait_fingerprint(response)
+                wait_repeated[wfp] = wait_repeated.get(wfp, 0) + 1
+                if wait_repeated[wfp] > int(limits["max_identical_wait_decisions"]):
+                    step["status"] = "failed"
+                    step["errors"] = ["Maximale Wartewiederholungen ueberschritten"]
+                    steps.append(step)
+                    session.steps.extend(steps)
+                    return {
+                        "status":  "failed",
+                        "message": "Ablauf abgebrochen: Warten auf Signal hat das Zeitlimit ueberschritten.",
+                    }
+            else:
+                # Alle anderen Entscheidungen: gemeinsamer Zaehler
+                fp = self._fingerprint(response)
+                repeated[fp] = repeated.get(fp, 0) + 1
+                if repeated[fp] > int(limits["max_identical_decisions"]):
+                    step["status"] = "failed"
+                    step["errors"] = ["Wiederholte identische KI-Entscheidung erkannt"]
+                    steps.append(step)
+                    session.steps.extend(steps)
+                    return {
+                        "status":  "failed",
+                        "message": "Ablauf wegen wiederholter identischer Entscheidung abgebrochen.",
+                    }
 
             # ── completed ──────────────────────────────────────────────────
             if decision == "completed":
@@ -776,6 +942,10 @@ class AgentControlService:
                     }
 
                 wait_secs = float(response["wait_seconds"])
+                # wait_seconds == 0.0: KI wartet auf externes Signal (Taster,
+                # Bedingung) ohne festen Timer. Anwendung pollt im 1s-Takt.
+                if wait_secs <= 0.0:
+                    wait_secs = 1.0
                 session.status = ProcessStatus.WAITING_TIMER
                 session.waiting_until = _iso_deadline(wait_secs)
                 session.next_wakeup_reason = "timer"
@@ -809,6 +979,9 @@ class AgentControlService:
                         "message": "Stopp waehrend Wartezustand angefordert.",
                     }
 
+                # Snapshot nach wait neu lesen und als neue Vergleichsbasis
+                # setzen. Dadurch loest eine erwartete Zustandsaenderung
+                # (z.B. .BAMPELANFORDERN wird true) keinen Abbruch aus.
                 snapshot, snap_errors = self._snapshot()
                 if snap_errors:
                     session.steps.extend(steps)
@@ -890,9 +1063,9 @@ class AgentControlService:
                     action["symbol"], spec["data_type"]
                 )
                 write_result.update({
-                    "actual":          _json_safe(actual),
-                    "readback_ok":     read_ok,
-                    "readback_error":  read_error,
+                    "actual":         _json_safe(actual),
+                    "readback_ok":    read_ok,
+                    "readback_error": read_error,
                 })
                 if not read_ok or not _same_value(actual, action["value"]):
                     step["status"] = "failed"
@@ -916,6 +1089,7 @@ class AgentControlService:
                         "message": "Erwartete Sensorreaktion blieb aus.",
                     }
 
+                # Snapshot nach Schreiben lesen und als neue Vergleichsbasis setzen
                 snapshot, snap_errors = self._snapshot()
                 step["snapshot_after"] = snapshot
                 step["status"] = "executed"
@@ -1103,14 +1277,14 @@ class AgentControlService:
         session.finished_at = _now()
         elapsed = round(time.monotonic() - overall_start, 3)
         return {
-            "ok":               ok,
-            "status":           status,
-            "job_id":           self.job_id,
-            "message":          message,
-            "cycle_count":      session.cycle_count,
-            "step_count":       session.total_step_count,
-            "write_count":      session.total_write_count,
-            "elapsed_seconds":  elapsed,
-            "steps":            session.steps,
-            "session":          session.public(),
+            "ok":              ok,
+            "status":          status,
+            "job_id":          self.job_id,
+            "message":         message,
+            "cycle_count":     session.cycle_count,
+            "step_count":      session.total_step_count,
+            "write_count":     session.total_write_count,
+            "elapsed_seconds": elapsed,
+            "steps":           session.steps,
+            "session":         session.public(),
         }

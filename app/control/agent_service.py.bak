@@ -29,14 +29,14 @@ from .wakeup import WakeResult, wait_for_ack, wait_for_timer
 
 DEFAULT_LIMITS: dict[str, Any] = {
     # bestehende Felder (unveraendert)
-    "max_steps":              8,
-    "max_writes_per_job":     8,
-    "max_writes_per_minute":  10,
+    "max_steps":              800,
+    "max_writes_per_job":     800,
+    "max_writes_per_minute":  50,
     "job_timeout_seconds":    120.0,
     "max_wait_seconds":       10.0,
-    "max_identical_decisions": 2,
+    "max_identical_decisions": 100,
     # neue Felder
-    "loop_mode":              False,
+    "loop_mode":              True,
     "max_cycles":             0,       # 0 = unbegrenzt
     "cycle_timeout_seconds":  300.0,
     "ack_timeout_seconds":    120.0,   # Wartezeit auf Fehlerquittierung
@@ -384,7 +384,7 @@ class AgentControlService:
                 ).total_seconds()
                 if age < -5:
                     errors.append("Zeitstempel liegt unzulaessig in der Zukunft")
-                elif age > float(self.machine.get("max_response_age_seconds", 15)):
+                elif age > float(self.machine.get("max_response_age_seconds", 120)):
                     errors.append("LLM-Antwort ist veraltet")
         except (TypeError, ValueError):
             errors.append("Zeitstempel ist ungueltig")

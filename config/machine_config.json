@@ -3,7 +3,7 @@
   "machine_name": "test",
   "enabled": true,
   "min_confidence": 0.85,
-  "max_response_age_seconds": 15,
+  "max_response_age_seconds": 120,
   "max_writes_per_minute": 100,
   "symbols": [
     {
