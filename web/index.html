@@ -1,384 +1,357 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ADS_KI_Maschinensteuerung</title><style>
-*{box-sizing:border-box}body{margin:0;background:#eef2f5;color:#17212b;font:14px Segoe UI,Arial,sans-serif}.top{background:#17212b;color:white;padding:16px 24px;display:flex;justify-content:space-between}.top h1{margin:0;font-size:20px}.badge,.status{padding:8px 10px;border-radius:4px;background:#f0f3f5}.badge{background:#56636d}.ok{color:#087f23;background:#e7f5ea}.bad{color:#a1261a;background:#fff0ee}.wrap{max-width:1700px;margin:18px auto;padding:0 18px;display:grid;grid-template-columns:330px 1fr;gap:16px}.card{background:white;border:1px solid #d6dde3;border-radius:6px;padding:15px;box-shadow:0 2px 8px #17212b12}.wide{grid-column:1/-1}.card h2{font-size:16px;margin:0 0 13px}.stack{display:grid;gap:9px}label{display:block;font-size:12px;font-weight:bold;color:#52606b;margin-bottom:8px}input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:8px;border:1px solid #b8c3cb;border-radius:4px;background:#fff}textarea{min-height:75px;resize:vertical}button{padding:9px 12px;background:#1967a3;color:white;border:0;border-radius:4px;cursor:pointer;font-weight:bold}.secondary{background:#5b6871}.danger{color:#b1281d;font-weight:bold}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}.muted{color:#6d7981;font-size:12px}.table{overflow:auto;border:1px solid #d6dde3;max-height:560px}table{border-collapse:collapse;width:100%;min-width:1200px;font-size:12px}th,td{padding:7px;border-bottom:1px solid #e1e6ea;text-align:left;vertical-align:top}th{position:sticky;top:0;background:#f2f5f7;color:#44515b}td input,td select{padding:6px;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.toggle{display:flex;gap:7px;align-items:center;font-size:13px}.toggle input{width:auto}pre{white-space:pre-wrap;word-break:break-word;font-size:12px}@media(max-width:950px){.wrap{grid-template-columns:1fr}.wide{grid-column:auto}}
-</style></head><body><div class="top"><h1>ADS_KI_Maschinensteuerung <small>eigenständiger Web-POC</small></h1><span id="badge" class="badge">ADS nicht verbunden</span></div><main class="wrap">
-<section class="card"><h2>ADS-Verbindung</h2><div class="stack"><label>Host / IP<input id="host" placeholder="192.168.0.10"></label><label>AMS Net ID<input id="ams" placeholder="192.168.0.10.1.1"></label><label>ADS-Port<input id="port" type="number" value="851"></label><div class="actions"><button onclick="connect()">Verbinden</button><button class="secondary" onclick="disconnect()">Trennen</button></div><div id="adsStatus" class="status">Nicht verbunden</div><button class="secondary" onclick="symbols()">Alle ADS-Symbole auslesen</button><div id="symbolStatus" class="muted">Noch keine Symbole geladen</div></div></section>
-<section class="card"><h2>Maschinenbeschreibung</h2><div class="grid"><label>Maschinenname<input id="machineName"></label><label>Version<input id="version"></label><label>Min. Konfidenz<input id="confidence" type="number" min="0" max="1" step=".01"></label><label>Schreibvorgänge/min<input id="writeLimit" type="number"></label></div><p class="muted">Die Beschreibung wird separat gespeichert. Nur ausgewählte Variablen werden an das LLM übertragen.</p><div class="actions"><button onclick="saveMachine()">Beschreibung speichern</button><button class="secondary" onclick="readValues()">Werte lesen</button></div><div id="machineStatus" class="status">Nicht geladen</div></section>
-<section class="card wide"><h2>Variablen auswählen und beschreiben</h2><div class="table"><table><thead><tr><th>Verwenden</th><th>ADS-Symbol</th><th>Typ</th><th>ADS-Kommentar</th><th>Eigene Funktion</th><th>Rolle</th><th>Schreiben</th><th>Erlaubte Werte</th><th>Erwartetes Feedback</th></tr></thead><tbody id="rows"></tbody></table></div></section>
-<section class="card"><h2>Freigaben / Verriegelungen</h2><label>Erforderlich TRUE<select id="reqTrue" multiple size="5"></select></label><label>Erforderlich FALSE<select id="reqFalse" multiple size="5"></select></label><label>Betriebsart-Symbol<select id="mode"><option value="">Keine Betriebsartprüfung</option></select></label><label>Erlaubte Betriebsarten<input id="modes" placeholder="AUTO, MANUAL"></label></section>
-<section class="card"><h2>LM Studio</h2><label>Lokale URL<input id="llmUrl" value="http://127.0.0.1:1234/v1"></label><label>Modell-ID<input id="llmModel"></label><button class="secondary" onclick="checkLlm()">LM Studio prüfen</button><div id="llmStatus" class="status">Nicht geprüft</div></section>
-<section class="card"><h2>Steuerbefehl</h2><label class="toggle"><input id="writeEnable" type="checkbox" onchange="enableWrite()"> Schreibmodus freigegeben</label><p class="muted">Die Freigabe bleibt aktiv, bis du sie ausschaltest. Beim Programmstart ist sie deaktiviert.</p><textarea id="commandText" placeholder="Ich will, dass der Zylinder A1 ausfährt."></textarea><button id="commandButton" onclick="sendCommand()">Befehl ausführen</button></section>
-<section class="card wide"><h2>Ergebnis</h2><div id="result" class="status">Noch kein Befehl ausgeführt</div><pre id="json"></pre></section></main><script>
-let S={symbols:[],machine:{symbols:[]}};
-let formDirty=false;
-let initialised=false;
-const E=id=>document.getElementById(id);
-
-async function api(path,body){
-  const r=await fetch(path,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(body||{})
-  });
-  return r.json();
-}
-
-async function getState(){
-  const r=await fetch('/api/state');
-  return r.json();
-}
-
-function markDirty(){
-  if(initialised) formDirty=true;
-}
-
-function bindDirtyTracking(){
-  document.querySelectorAll('input, select, textarea').forEach(element=>{
-    element.addEventListener('input',markDirty);
-    element.addEventListener('change',markDirty);
-  });
-}
-
-async function refreshInitial(){
-  S=await getState();
-  applyConnectionState();
-  applySettingsState();
-  fillMachine();
-  render();
-  E('writeEnable').checked=Boolean(S.write_enabled);
-  initialised=true;
-  formDirty=false;
-  bindDirtyTracking();
-}
-
-async function refreshStatus(){
-  const latest=await getState();
-  S.ads_connected=latest.ads_connected;
-  S.write_enabled=latest.write_enabled;
-  S.last_result=latest.last_result;
-  applyConnectionState();
-  // Do not call fillMachine() or render() here. Those functions would
-  // overwrite text fields, selections and descriptions while the user edits.
-  if(!formDirty && !document.activeElement.matches('input,select,textarea')){
-    if(S.last_result){
-      E('result').textContent=S.last_result.message||'';
-      E('result').className='status '+(S.last_result.ok?'ok':'bad');
-      E('json').textContent=JSON.stringify(S.last_result,null,2);
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADS_KI_Maschinensteuerung</title>
+  <style>
+    :root {
+      --bg: #101418;
+      --panel: #171d23;
+      --panel-2: #1d252d;
+      --line: #33404b;
+      --text: #edf2f5;
+      --muted: #aab7c1;
+      --accent: #67d3a5;
+      --warn: #f0bd67;
+      --danger: #f27d7d;
+      --info: #7fb6ee;
+      --radius: 12px;
     }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 90% 0%, #1b3032 0, transparent 35%), var(--bg);
+      color: var(--text);
+      font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding: 24px clamp(18px, 4vw, 56px) 20px;
+      background: rgba(16, 20, 24, .9);
+    }
+    header h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); letter-spacing: -.04em; }
+    header p { color: var(--muted); margin: 7px 0 0; max-width: 800px; }
+    main { max-width: 1500px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 42px) 60px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+    .panel { grid-column: span 6; background: rgba(23,29,35,.96); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-width: 0; }
+    .panel.wide { grid-column: span 12; }
+    .panel.third { grid-column: span 4; }
+    @media (max-width: 900px) { .panel, .panel.third { grid-column: span 12; } }
+    h2 { margin: 0 0 14px; font-size: 18px; letter-spacing: -.02em; }
+    h3 { margin: 18px 0 8px; font-size: 15px; color: var(--accent); }
+    .eyebrow { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; margin-bottom: 5px; }
+    .fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (max-width: 620px) { .fields, .fields.two { grid-template-columns: 1fr; } }
+    label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
+    input, textarea, select, button {
+      font: inherit; border-radius: 8px; border: 1px solid var(--line); color: var(--text);
+    }
+    input, textarea, select { background: #11171c; padding: 9px 10px; width: 100%; }
+    textarea { min-height: 130px; resize: vertical; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; }
+    button { background: var(--panel-2); padding: 9px 13px; cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button.primary { background: #245844; border-color: #3c936d; }
+    button.danger { border-color: #945555; color: #ffd0d0; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .statusbar { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-bottom: 16px; }
+    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; font-size: 12px; color: var(--muted); }
+    .pill.ok { border-color: #3e8e6c; color: var(--accent); }
+    .pill.warn { border-color: #9a773d; color: var(--warn); }
+    .pill.bad { border-color: #945555; color: var(--danger); }
+    .notice { border-left: 3px solid var(--warn); background: #282319; padding: 10px 12px; color: #f4dcae; margin-bottom: 15px; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+    .progress { background: #11171c; border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 54px; }
+    .step-list { display: grid; gap: 10px; margin-top: 12px; }
+    .step { border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: #141a1f; }
+    .step-head { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
+    .step-title { font-weight: 700; }
+    .step pre, pre.result { white-space: pre-wrap; overflow-wrap: anywhere; margin: 9px 0 0; color: #c8d4dc; font-size: 12px; }
+    .step details { margin-top: 8px; }
+    summary { cursor: pointer; color: var(--info); font-size: 12px; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; min-width: 720px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
+    th { color: var(--muted); background: #12181d; position: sticky; top: 0; }
+    tr:last-child td { border-bottom: 0; }
+    .check { display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .check input { width: auto; }
+    #toast { position: fixed; right: 18px; bottom: 18px; max-width: 420px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: #202932; display: none; box-shadow: 0 8px 30px #0008; }
+    #toast.show { display: block; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">ADS_KI_Maschinensteuerung</div>
+  <h1>Kontrollierte Maschinenaufträge</h1>
+  <p>Mehrstufige KI-Unterstützung für einen nicht echtzeitfähigen TwinCAT-POC. Jede Schreibaktion bleibt durch Maschinenbeschreibung, Bedienerfreigabe, Rücklesen und Feedbackprüfung begrenzt.</p>
+</header>
+<main>
+  <div class="notice"><strong>Sicherheitsgrenze:</strong> Diese Anwendung ersetzt keine Sicherheitssteuerung, keinen Not-Aus, keine Schutzfunktion, keinen schnellen Regelkreis und keine zeitkritische Motion-Control-Funktion.</div>
+  <div class="statusbar">
+    <span id="adsPill" class="pill">ADS: unbekannt</span>
+    <span id="writePill" class="pill">Schreibfreigabe: aus</span>
+    <span id="jobPill" class="pill">Auftrag: keiner</span>
+    <span id="machinePill" class="pill">Maschine: unbekannt</span>
+    <span id="message" class="muted small"></span>
+  </div>
+
+  <section class="grid">
+    <article class="panel third">
+      <div class="eyebrow">Verbindung</div>
+      <h2>ADS-Verbindung</h2>
+      <div class="fields">
+        <label>Host / IP<input id="adsHost" autocomplete="off"></label>
+        <label>AMS Net ID<input id="adsAms" autocomplete="off"></label>
+        <label>ADS-Port<input id="adsPort" type="number" value="851"></label>
+      </div>
+      <div class="actions">
+        <button id="connectBtn" class="primary">Verbinden</button>
+        <button id="disconnectBtn" class="danger">Trennen</button>
+        <button id="symbolsBtn">Symbole laden</button>
+        <button id="readBtn">Werte lesen</button>
+      </div>
+      <p id="connectionText" class="muted small">Noch nicht verbunden.</p>
+    </article>
+
+    <article class="panel third">
+      <div class="eyebrow">Lokales Modell</div>
+      <h2>LM Studio</h2>
+      <div class="fields two">
+        <label>Lokale URL<input id="llmUrl" value="http://127.0.0.1:1234/v1"></label>
+        <label>Modell-ID<input id="llmModel"></label>
+      </div>
+      <div class="actions"><button id="llmCheckBtn">LM Studio prüfen</button><button id="settingsBtn">Einstellungen speichern</button></div>
+      <p id="llmText" class="muted small">Noch nicht geprüft.</p>
+    </article>
+
+    <article class="panel third">
+      <div class="eyebrow">Bedienerfreigabe</div>
+      <h2>Schreibmodus</h2>
+      <label class="check"><input id="writeEnable" type="checkbox"> Schreibzugriffe bewusst freigeben</label>
+      <p class="muted small">Beim Programmstart ist die Freigabe aus. Sie wird nicht von der KI aktiviert und kann während eines laufenden Auftrags widerrufen werden.</p>
+      <p id="machineText" class="muted small">Maschinenbeschreibung nicht geladen.</p>
+    </article>
+
+    <article class="panel wide">
+      <div class="eyebrow">Maschinenbeschreibung</div>
+      <h2>Konfiguration prüfen und speichern</h2>
+      <p class="muted small">Die JSON-Beschreibung ist die verbindliche Whitelist. Keine neuen ADS-Symbole aus dem Chat oder aus der KI-Antwort übernehmen.</p>
+      <textarea id="machineJson" spellcheck="false" aria-label="Maschinenbeschreibung als JSON"></textarea>
+      <div class="actions"><button id="machineSaveBtn" class="primary">Maschinenbeschreibung speichern</button><button id="machineFormatBtn">JSON formatieren</button></div>
+    </article>
+
+    <article class="panel wide">
+      <div class="eyebrow">Steuerauftrag</div>
+      <h2>Ein Auftrag, viele kontrollierte Schritte</h2>
+      <label>Benutzerbefehl<textarea id="command" placeholder="Beispiel: Fahre die Maschine in Grundstellung."></textarea></label>
+      <div class="actions">
+        <button id="commandBtn" class="primary">Auftrag ausführen</button>
+        <button id="stopPollBtn">Statusabfrage pausieren</button>
+      </div>
+      <p id="commandText" class="muted small">Noch kein Auftrag gestartet.</p>
+      <div id="progress" class="progress muted">Der laufende Auftrag erscheint hier mit jedem geprüften Schritt.</div>
+      <div id="steps" class="step-list"></div>
+      <pre id="result" class="result"></pre>
+    </article>
+
+    <article class="panel wide">
+      <div class="eyebrow">Variablen-Editor</div>
+      <h2>Variablen auswählen und beschreiben</h2>
+      <p class="muted small">Nur markierte Variablen werden in die Maschinenbeschreibung übernommen und an die KI übertragen. ADS-Symbolname und Datentyp bleiben unverändert; Beschreibung, Rolle, Schreibfreigabe und erwartetes Feedback können bearbeitet werden.</p>
+      <div class="actions">
+        <button id="selectAllBtn">Alle auswählen</button>
+        <button id="selectNoneBtn">Alle abwählen</button>
+        <button id="variableSaveBtn" class="primary">Variablenkonfiguration speichern</button>
+      </div>
+      <div id="variableEditor" class="table-wrap muted small">Zuerst ADS-Symbole laden.</div>
+    </article>
+
+    <article class="panel wide">
+      <div class="eyebrow">ADS-Symbole</div>
+      <h2>Technische Symbolübersicht</h2>
+      <div id="symbols" class="muted small">Noch keine Symbole geladen.</div>
+    </article>
+
+    <article class="panel wide">
+      <div class="eyebrow">Snapshot</div>
+      <h2>Aktuelle konfigurierte Werte</h2>
+      <div id="values" class="muted small">Noch keine Werte gelesen.</div>
+    </article>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let poll = true;
+  let lastStepKey = "";
+
+  function toast(text, bad = false) {
+    const el = $("toast");
+    el.textContent = text;
+    el.style.borderColor = bad ? "#945555" : "#3e8e6c";
+    el.classList.add("show");
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => el.classList.remove("show"), 3800);
   }
-}
-
-function applyConnectionState(){
-  E('badge').textContent=S.ads_connected?'ADS verbunden':'ADS nicht verbunden';
-  E('badge').style.background=S.ads_connected?'#267a42':'#56636d';
-  E('writeEnable').checked=Boolean(S.write_enabled);
-}
-
-function applySettingsState(){
-  E('host').value=S.ads?.host||'';
-  E('ams').value=S.ads?.ams_net_id||'';
-  E('port').value=S.ads?.port||851;
-  E('llmUrl').value=S.llm?.base_url||'http://127.0.0.1:1234/v1';
-  E('llmModel').value=S.llm?.model||'';
-}
-
-async function connect(){
-  const r=await api('/api/connect',{
-    host:E('host').value.trim(),
-    ams_net_id:E('ams').value.trim(),
-    port:Number(E('port').value)
-  });
-  E('adsStatus').textContent=r.message||'';
-  E('adsStatus').className='status '+(r.ok?'ok':'bad');
-  formDirty=false;
-  await refreshStatus();
-}
-
-async function disconnect(){
-  await api('/api/disconnect');
-  E('adsStatus').textContent='ADS getrennt';
-  E('adsStatus').className='status';
-  E('writeEnable').checked=false;
-  S.write_enabled=false;
-  formDirty=false;
-  await refreshStatus();
-}
-
-async function symbols(){
-  const r=await api('/api/symbols');
-  E('symbolStatus').textContent=r.ok?r.symbols.length+' Symbole geladen':r.message;
-  E('symbolStatus').className=r.ok?'muted':'danger';
-  if(r.ok){
-    S.symbols=r.symbols;
-    render();
-    bindDirtyTracking();
+  async function api(path, options = {}) {
+    const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+    const data = await res.json().catch(() => ({ ok: false, message: "Ungültige Serverantwort" }));
+    if (!res.ok && data.ok !== false) data.ok = false;
+    return data;
   }
-}
+  function setPill(id, text, cls = "") {
+    const el = $(id); el.textContent = text; el.className = "pill " + cls;
+  }
+  function pretty(value) {
+    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
+  }
+  let loadedSymbols = [];
+  function renderVariableEditor(machine = {}) {
+    const configured = new Map((machine.symbols || []).map(item => [item.symbol, item]));
+    const items = loadedSymbols || [];
+    if (!items.length) { $("variableEditor").textContent = "Zuerst ADS-Symbole laden."; return; }
+    const wrap = document.createElement("div"); wrap.className = "table-wrap";
+    const table = document.createElement("table");
+    table.innerHTML = "<thead><tr><th>Verwenden</th><th>ADS-Symbol</th><th>Typ</th><th>ADS-Kommentar</th><th>Eigene Beschreibung</th><th>Rolle</th><th>Schreiben</th><th>Erlaubte Werte</th><th>Erwartetes Feedback</th></tr></thead>";
+    const body = document.createElement("tbody");
+    items.forEach(item => {
+      const spec = configured.get(item.name) || { symbol: item.name, data_type: item.data_type, role: "state", description: item.comment || "", writable: false, allowed_values: null, expected_feedback: [] };
+      const tr = document.createElement("tr");
+      const use = document.createElement("input"); use.type = "checkbox"; use.className = "var-use"; use.checked = configured.has(item.name); use.dataset.symbol = item.name;
+      const useTd = document.createElement("td"); useTd.appendChild(use); tr.appendChild(useTd);
+      [item.name, item.data_type, item.comment || ""].forEach(value => { const td = document.createElement("td"); td.textContent = value; tr.appendChild(td); });
+      const desc = document.createElement("input"); desc.className = "var-description"; desc.value = spec.description || ""; desc.dataset.symbol = item.name; const descTd = document.createElement("td"); descTd.appendChild(desc); tr.appendChild(descTd);
+      const role = document.createElement("select"); role.className = "var-role"; role.dataset.symbol = item.name; ["sensor", "actuator", "feedback", "state", "mode", "permission", "interlock"].forEach(value => { const option = document.createElement("option"); option.value = value; option.textContent = value; option.selected = (spec.role || "state") === value; role.appendChild(option); }); const roleTd = document.createElement("td"); roleTd.appendChild(role); tr.appendChild(roleTd);
+      const writable = document.createElement("input"); writable.type = "checkbox"; writable.className = "var-writable"; writable.checked = spec.writable === true; writable.dataset.symbol = item.name; const writeTd = document.createElement("td"); writeTd.appendChild(writable); tr.appendChild(writeTd);
+      const allowed = document.createElement("input"); allowed.className = "var-allowed"; allowed.dataset.symbol = item.name; allowed.value = spec.allowed_values == null ? "" : JSON.stringify(spec.allowed_values); allowed.placeholder = "z. B. [false,true]"; const allowedTd = document.createElement("td"); allowedTd.appendChild(allowed); tr.appendChild(allowedTd);
+      const feedback = document.createElement("input"); feedback.className = "var-feedback"; feedback.dataset.symbol = item.name; feedback.value = spec.expected_feedback?.length ? JSON.stringify(spec.expected_feedback) : ""; feedback.placeholder = '[{"symbol":"...","value":true}]'; const feedbackTd = document.createElement("td"); feedbackTd.appendChild(feedback); tr.appendChild(feedbackTd);
+      body.appendChild(tr);
+    });
+    table.appendChild(body); wrap.appendChild(table); $("variableEditor").replaceChildren(wrap);
+  }
+  function renderSymbols(items) {
+    loadedSymbols = items || [];
+    renderVariableEditor(window.currentMachine || {});
+    if (!items || !items.length) { $("symbols").textContent = "Keine Symbole geladen."; return; }
+    const wrap = document.createElement("div"); wrap.className = "table-wrap";
+    const table = document.createElement("table");
+    table.innerHTML = "<thead><tr><th>Symbol</th><th>Typ</th><th>Kommentar</th><th>Unterstützt</th></tr></thead>";
+    const body = document.createElement("tbody");
+    items.forEach(item => {
+      const tr = document.createElement("tr");
+      [item.name, item.tc_type || item.data_type, item.comment || "", item.supported === false ? "nein" : "ja"].forEach(v => { const td = document.createElement("td"); td.textContent = String(v ?? ""); tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    table.appendChild(body); wrap.appendChild(table); $("symbols").replaceChildren(wrap);
+  }
+  function renderValues(items) {
+    if (!items || !items.length) { $("values").textContent = "Keine Werte gelesen."; return; }
+    const wrap = document.createElement("div"); wrap.className = "table-wrap";
+    const table = document.createElement("table"); table.innerHTML = "<thead><tr><th>Symbol</th><th>Wert</th><th>Gültig</th><th>Fehler</th></tr></thead>";
+    const body = document.createElement("tbody");
+    items.forEach(item => {
+      const tr = document.createElement("tr");
+      [item.symbol, pretty(item.value), item.valid ? "ja" : "nein", item.error || ""].forEach(v => { const td = document.createElement("td"); td.textContent = String(v ?? ""); tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    table.appendChild(body); wrap.appendChild(table); $("values").replaceChildren(wrap);
+  }
+  function renderStep(step, index) {
+    const box = document.createElement("article"); box.className = "step";
+    const head = document.createElement("div"); head.className = "step-head";
+    const title = document.createElement("div"); title.className = "step-title"; title.textContent = `Schritt ${step.step ?? index + 1}: ${step.status || step.event || "Status"}`;
+    const stamp = document.createElement("span"); stamp.className = "pill"; stamp.textContent = step.started_at || "laufend";
+    head.append(title, stamp); box.appendChild(head);
+    const response = step.response || step.decision;
+    if (response) { const p = document.createElement("p"); p.className = "small"; p.textContent = response.summary || response.decision || "KI-Entscheidung empfangen"; box.appendChild(p); }
+    if (step.write) { const p = document.createElement("p"); p.className = "small mono"; p.textContent = `ADS: ${step.write.symbol} = ${pretty(step.write.requested)} | Rücklesen: ${pretty(step.write.actual)} | ok=${step.write.readback_ok}`; box.appendChild(p); }
+    if (step.errors?.length) { const p = document.createElement("p"); p.className = "small"; p.style.color = "var(--danger)"; p.textContent = "Fehler: " + step.errors.join(" | "); box.appendChild(p); }
+    const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = "Technische Schrittinformationen anzeigen"; details.appendChild(summary);
+    const pre = document.createElement("pre"); pre.textContent = pretty(step); details.appendChild(pre); box.appendChild(details);
+    return box;
+  }
+  function renderStatus(data) {
+    const running = !!data.running;
+    setPill("jobPill", running ? `Auftrag läuft: ${data.job_id || ""}` : (data.result ? `Auftrag: ${data.result.status || "beendet"}` : "Auftrag: keiner"), running ? "warn" : (data.result?.ok ? "ok" : ""));
+    $("commandText").textContent = data.command ? `Befehl: ${data.command}` : "Noch kein Auftrag gestartet.";
+    const progress = data.progress || {};
+    $("progress").textContent = progress.last_event ? `Aktueller Status: ${progress.event || "progress"} | Schritt ${progress.step ?? 0}` : (running ? "Auftrag läuft ..." : "Kein laufender Auftrag.");
+    const source = data.result?.steps || progress.steps || [];
+    const key = JSON.stringify(source.map(x => [x.step, x.status, x.event, x.write?.symbol]));
+    if (key !== lastStepKey) { lastStepKey = key; $("steps").replaceChildren(...source.map(renderStep)); }
+    if (data.result) $("result").textContent = pretty(data.result);
+    $("commandBtn").disabled = running;
+  }
+  async function refreshState() {
+    try {
+      const data = await api("/api/state");
+      setPill("adsPill", data.ads_connected ? "ADS: verbunden" : "ADS: nicht verbunden", data.ads_connected ? "ok" : "bad");
+      setPill("writePill", data.write_enabled ? "Schreibfreigabe: aktiv" : "Schreibfreigabe: aus", data.write_enabled ? "warn" : "");
+      setPill("machinePill", `Maschine: ${data.machine?.machine_name || "unbekannt"}`, data.machine?.enabled ? "ok" : "bad");
+      $("writeEnable").checked = !!data.write_enabled;
+      if (data.ads) { $("adsHost").value = data.ads.host || ""; $("adsAms").value = data.ads.ams_net_id || ""; $("adsPort").value = data.ads.port || 851; }
+      if (data.llm) { $("llmUrl").value = data.llm.base_url || "http://127.0.0.1:1234/v1"; $("llmModel").value = data.llm.model || ""; }
+      if (data.machine) { window.currentMachine = data.machine; $("machineText").textContent = `${data.machine.machine_name || "Maschine"} | Version ${data.machine.version || "?"} | aktiv=${data.machine.enabled === true}`; if (!$('machineJson').value) $('machineJson').value = pretty(data.machine); renderVariableEditor(data.machine); }
+    } catch (err) { $("message").textContent = "Status konnte nicht gelesen werden."; }
+  }
+  async function refreshCommand() { if (!poll) return; try { renderStatus(await api("/api/command-status")); } catch {} }
 
-function esc(v){
-  return String(v??'')
-    .replaceAll('&','&amp;')
-    .replaceAll('"','&quot;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;');
-}
-
-function selectedMap(){
-  const m={};
-  (S.machine.symbols||[]).forEach(x=>m[x.symbol]=x);
-  return m;
-}
-
-function render(){
-  const m=selectedMap();
-  let html='';
-  S.symbols.forEach(s=>{
-    const x=m[s.name]||{};
-    html+=`<tr data-s="${esc(s.name)}">
-      <td><input class="use" type="checkbox" ${x.symbol?'checked':''}></td>
-      <td><b>${esc(s.name)}</b></td>
-      <td>${esc(s.data_type)}</td>
-      <td>${esc(s.comment)}</td>
-      <td><input class="desc" value="${esc(x.description||'')}"></td>
-      <td><select class="role">
-        <option value="sensor">Sensor / Eingang</option>
-        <option value="actuator">Aktor / Ausgang</option>
-        <option value="permission">Freigabe</option>
-        <option value="interlock">Verriegelung</option>
-        <option value="mode">Betriebsart</option>
-        <option value="state">Zustand</option>
-      </select></td>
-      <td><input class="write" type="checkbox" ${x.writable?'checked':''} onchange="setActuatorRole(this)"></td>
-      <td><input class="allowed" value="${esc((x.allowed_values||[]).join(', '))}" placeholder="leer = alle Werte erlaubt"></td>
-      <td><input class="feedback" value="${esc((x.expected_feedback||[]).map(f=>f.symbol+'='+f.value).join('; '))}" placeholder="MAIN.bAusgefahren=true"></td>
-    </tr>`;
-  });
-  E('rows').innerHTML=html;
-  document.querySelectorAll('#rows tr').forEach(tr=>{
-    const x=m[tr.dataset.s]||{};
-    tr.querySelector('.role').value=x.role||'sensor';
-  });
-  selects();
-  bindDirtyTracking();
-}
-
-function setActuatorRole(checkbox){
-  if(!checkbox.checked)return;
-  const row=checkbox.closest('tr');
-  const role=row?.querySelector('.role');
-  if(role)role.value='actuator';
-}
-
-function val(v){
-  if(v==='true'||v==='TRUE')return true;
-  if(v==='false'||v==='FALSE')return false;
-  if(v!==''&&!isNaN(v))return Number(v);
-  return v;
-}
-
-function collect(){
-  const result=[];
-  document.querySelectorAll('#rows tr').forEach(tr=>{
-    if(!tr.querySelector('.use').checked)return;
-    const name=tr.dataset.s;
-    const source=S.symbols.find(x=>x.name===name);
-    const feedback=[];
-    tr.querySelector('.feedback').value.split(';').map(x=>x.trim()).filter(Boolean).forEach(x=>{
-      const i=x.lastIndexOf('=');
-      if(i>0){
-        feedback.push({
-          symbol:x.slice(0,i).trim(),
-          value:val(x.slice(i+1).trim()),
-          timeout_seconds:5,
-          poll_interval_seconds:.1
+  $("connectBtn").onclick = async () => { const data = await api("/api/connect", { method: "POST", body: JSON.stringify({ ads: { host: $("adsHost").value.trim(), ams_net_id: $("adsAms").value.trim(), port: Number($("adsPort").value) } }) }); $("connectionText").textContent = data.message || ""; toast(data.message || (data.ok ? "Verbunden" : "Verbindung fehlgeschlagen"), !data.ok); await refreshState(); };
+  $("disconnectBtn").onclick = async () => { const data = await api("/api/disconnect", { method: "POST", body: "{}" }); toast(data.message || (data.ok ? "Getrennt" : "Trennen nicht möglich"), !data.ok); await refreshState(); };
+  $("symbolsBtn").onclick = async () => { const data = await api("/api/symbols", { method: "POST", body: "{}" }); renderSymbols(data.symbols); toast(data.message || `${data.symbols?.length || 0} Symbole geladen`, !data.ok); };
+  $("selectAllBtn").onclick = () => document.querySelectorAll(".var-use").forEach(input => { input.checked = true; });
+  $("selectNoneBtn").onclick = () => document.querySelectorAll(".var-use").forEach(input => { input.checked = false; });
+  $("variableSaveBtn").onclick = async () => {
+    try {
+      const old = window.currentMachine || {};
+      const symbols = [];
+      for (const use of document.querySelectorAll(".var-use")) {
+        if (!use.checked) continue;
+        const symbol = use.dataset.symbol;
+        const technical = loadedSymbols.find(item => item.name === symbol) || {};
+        const parseOptional = (selector, fallback) => {
+          const value = document.querySelector(`${selector}[data-symbol="${CSS.escape(symbol)}"]`)?.value?.trim();
+          if (!value) return fallback;
+          return JSON.parse(value);
+        };
+        const role = document.querySelector(`.var-role[data-symbol="${CSS.escape(symbol)}"]`).value;
+        const writable = document.querySelector(`.var-writable[data-symbol="${CSS.escape(symbol)}"]`).checked;
+        symbols.push({
+          symbol,
+          data_type: technical.data_type,
+          role,
+          description: document.querySelector(`.var-description[data-symbol="${CSS.escape(symbol)}"]`).value.trim() || technical.comment || symbol,
+          writable,
+          allowed_values: parseOptional(".var-allowed", null),
+          expected_feedback: parseOptional(".var-feedback", []),
         });
       }
-    });
-    result.push({
-      symbol:name,
-      data_type:source.data_type,
-      role:tr.querySelector('.role').value,
-      description:tr.querySelector('.desc').value.trim()||source.comment||name,
-      writable:tr.querySelector('.write').checked,
-      allowed_values:(tr.querySelector('.allowed').value.trim() ?
-        tr.querySelector('.allowed').value.split(',').map(x=>x.trim()).filter(Boolean).map(val) : null),
-      expected_feedback:feedback
-    });
-  });
-  return result;
-}
-
-function selects(){
-  const selected=S.machine.symbols||[];
-  ['reqTrue','reqFalse'].forEach(id=>{
-    E(id).innerHTML='';
-    selected.forEach(s=>{
-      const o=document.createElement('option');
-      o.value=s.symbol;
-      o.textContent=s.symbol;
-      E(id).appendChild(o);
-    });
-  });
-  E('mode').innerHTML='<option value="">Keine Betriebsartprüfung</option>';
-  selected.filter(s=>s.role==='mode').forEach(s=>{
-    const o=document.createElement('option');
-    o.value=s.symbol;
-    o.textContent=s.symbol;
-    E('mode').appendChild(o);
-  });
-}
-
-function setMulti(id,values){
-  [...E(id).options].forEach(o=>o.selected=values.includes(o.value));
-}
-
-function fillMachine(){
-  const m=S.machine||{};
-  E('machineName').value=m.machine_name||'';
-  E('version').value=m.version||'0.1.0-poc';
-  E('confidence').value=m.min_confidence??.85;
-  E('writeLimit').value=m.max_writes_per_minute??10;
-  E('machineStatus').textContent=m.enabled?'Aktiviert':'Deaktiviert';
-  E('machineStatus').className='status '+(m.enabled?'ok':'');
-  selects();
-  const x=m.execution||{};
-  setMulti('reqTrue',x.required_true||[]);
-  setMulti('reqFalse',x.required_false||[]);
-  E('mode').value=x.mode_symbol||'';
-  E('modes').value=(x.allowed_modes||[]).join(', ');
-}
-
-async function saveMachine(){
-  const m={
-    version:E('version').value||'0.1.0-poc',
-    machine_name:E('machineName').value||'Maschine',
-    enabled:true,
-    min_confidence:Number(E('confidence').value),
-    max_response_age_seconds:15,
-    max_writes_per_minute:Number(E('writeLimit').value),
-    symbols:collect(),
-    execution:{
-      required_true:[...E('reqTrue').selectedOptions].map(x=>x.value),
-      required_false:[...E('reqFalse').selectedOptions].map(x=>x.value),
-      mode_symbol:E('mode').value||null,
-      allowed_modes:E('modes').value.split(',').map(x=>x.trim()).filter(Boolean),
-      mode_values:(S.machine.execution||{}).mode_values||{}
-    }
+      const next = { ...old, symbols };
+      const data = await api("/api/machine", { method: "POST", body: JSON.stringify(next) });
+      if (!data.ok) return toast(data.message || "Speichern fehlgeschlagen", true);
+      window.currentMachine = data.machine; $("machineJson").value = pretty(data.machine); renderVariableEditor(data.machine); toast("Variablenkonfiguration gespeichert");
+    } catch (err) { toast(`Variablenkonfiguration ungültig: ${err.message}`, true); }
   };
-  const r=await api('/api/machine',m);
-  if(r.ok){
-    S.machine=m;
-    formDirty=false;
-    E('machineStatus').textContent='Gespeichert und aktiviert';
-    E('machineStatus').className='status ok';
-  }else{
-    E('machineStatus').textContent=r.message||'Speichern fehlgeschlagen';
-    E('machineStatus').className='status bad';
-  }
-}
+  $("readBtn").onclick = async () => { const data = await api("/api/read", { method: "POST", body: "{}" }); renderValues(data.values); toast(data.ok ? "Werte gelesen" : data.message, !data.ok); };
+  $("writeEnable").onchange = async e => { const data = await api("/api/write-enable", { method: "POST", body: JSON.stringify({ enabled: e.target.checked }) }); if (!data.ok) e.target.checked = false; toast(data.message || (data.write_enabled ? "Schreibfreigabe aktiv" : "Schreibfreigabe aus"), !data.ok); await refreshState(); };
+  $("llmCheckBtn").onclick = async () => { const data = await api("/api/llm/check"); $("llmText").textContent = data.message || ""; toast(data.message || "", !data.ok); };
+  $("settingsBtn").onclick = async () => { const data = await api("/api/settings", { method: "POST", body: JSON.stringify({ llm: { base_url: $("llmUrl").value.trim(), model: $("llmModel").value.trim() } }) }); toast(data.ok ? "Einstellungen gespeichert" : data.message, !data.ok); };
+  $("machineFormatBtn").onclick = () => { try { $("machineJson").value = pretty(JSON.parse($("machineJson").value)); toast("JSON formatiert"); } catch (err) { toast("Maschinenbeschreibung ist kein gültiges JSON.", true); } };
+  $("machineSaveBtn").onclick = async () => { try { const parsed = JSON.parse($("machineJson").value); const data = await api("/api/machine", { method: "POST", body: JSON.stringify(parsed) }); toast(data.ok ? "Maschinenbeschreibung gespeichert" : data.message, !data.ok); if (data.machine) $("machineJson").value = pretty(data.machine); await refreshState(); } catch (err) { toast("Maschinenbeschreibung ist kein gültiges JSON.", true); } };
+  $("commandBtn").onclick = async () => { const command = $("command").value.trim(); if (!command) return toast("Bitte einen Benutzerbefehl eingeben.", true); const data = await api("/api/command", { method: "POST", body: JSON.stringify({ command }) }); toast(data.message || "Auftrag gestartet", !data.ok); if (data.ok) { lastStepKey = ""; await refreshCommand(); } };
+  $("stopPollBtn").onclick = e => { poll = !poll; e.target.textContent = poll ? "Statusabfrage pausieren" : "Statusabfrage fortsetzen"; };
 
-async function readValues(){
-  const r=await api('/api/read');
-  E('result').textContent=r.ok?'Ausgewählte Werte gelesen':'Fehler';
-  E('json').textContent=JSON.stringify(r,null,2);
-}
-
-async function enableWrite(){
-  const enabled=E('writeEnable').checked;
-  const r=await api('/api/write-enable',{enabled});
-  if(r.ok){
-    S.write_enabled=r.write_enabled;
-    E('writeEnable').checked=Boolean(r.write_enabled);
-  }
-}
-
-async function checkLlm(){
-  const r=await api('/api/settings',{
-    llm:{
-      base_url:E('llmUrl').value.trim(),
-      model:E('llmModel').value.trim()
-    }
-  });
-  if(!r.ok){
-    E('llmStatus').textContent=r.message||'LLM-Einstellungen konnten nicht gespeichert werden';
-    E('llmStatus').className='status bad';
-    return;
-  }
-  const check=await fetch('/api/llm/check');
-  const result=await check.json();
-  E('llmStatus').textContent=result.message;
-  E('llmStatus').className='status '+(result.ok?'ok':'bad');
-  formDirty=false;
-}
-
-async function getJson(path){
-  const r=await fetch(path);
-  return r.json();
-}
-
-async function sendCommand(){
-  const button=E('commandButton');
-  const commandText=E('commandText').value.trim();
-  if(!commandText){
-    E('result').textContent='Kein Befehl eingegeben.';
-    E('result').className='status bad';
-    return;
-  }
-  button.disabled=true;
-  button.textContent='Befehl wird verarbeitet ...';
-  E('result').textContent='Befehl angenommen. ADS-Snapshot und lokales LLM werden geprüft ...';
-  E('result').className='status';
-  E('json').textContent='';
-  try{
-    const r=await api('/api/command',{
-      command:commandText,
-      llm:{base_url:E('llmUrl').value.trim(),model:E('llmModel').value.trim()}
-    });
-    if(!r.ok){
-      showCommandResult(r);
-      button.disabled=false;
-      button.textContent='Befehl ausführen';
-      return;
-    }
-    E('json').textContent=JSON.stringify(r,null,2);
-    await waitForCommand(r.job_id);
-  }catch(error){
-    showCommandResult({ok:false,message:'Verbindungsfehler beim Start der Befehlsausführung.',errors:[String(error)]});
-  }finally{
-    button.disabled=false;
-    button.textContent='Befehl ausführen';
-  }
-}
-
-async function waitForCommand(jobId){
-  for(let attempt=0;attempt<180;attempt++){
-    await new Promise(resolve=>setTimeout(resolve,1000));
-    try{
-      const status=await getJson('/api/command-status');
-      if(status.running){
-        E('result').textContent='Befehl läuft: ADS-Werte werden gelesen, LLM wird ausgewertet oder Sensorfeedback wird geprüft ...';
-        E('result').className='status';
-        continue;
-      }
-      if(status.job_id===jobId || status.result){
-        showCommandResult(status.result||{ok:false,message:'Kein Ergebnis vom Backend erhalten.'});
-        return;
-      }
-    }catch(error){
-      showCommandResult({ok:false,message:'Status der Befehlsausführung konnte nicht gelesen werden.',errors:[String(error)]});
-      return;
-    }
-  }
-  showCommandResult({ok:false,message:'Zeitüberschreitung bei der Befehlsausführung.',errors:['Das Backend hat innerhalb von 180 Sekunden kein Ergebnis geliefert.']});
-}
-
-function showCommandResult(result){
-  const value=result||{ok:false,message:'Unbekanntes Ergebnis'};
-  E('result').textContent=value.message||'';
-  E('result').className='status '+(value.ok?'ok':'bad');
-  E('json').textContent=JSON.stringify(value,null,2);
-  formDirty=false;
-}
-
-refreshInitial();
-setInterval(refreshStatus,3000);
-</script></body></html>
+  refreshState(); refreshCommand();
+  setInterval(refreshState, 4000);
+  setInterval(refreshCommand, 700);
+})();
+</script>
+</body>
+</html>

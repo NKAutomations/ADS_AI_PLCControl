@@ -16,6 +16,42 @@
       "expected_feedback": []
     },
     {
+      "symbol": ".BAMPELERROR",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Fehler ausgang",
+      "writable": true,
+      "allowed_values": null,
+      "expected_feedback": []
+    },
+    {
+      "symbol": ".BAMPELGELB",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Gelbe ampel",
+      "writable": true,
+      "allowed_values": null,
+      "expected_feedback": []
+    },
+    {
+      "symbol": ".BAMPELGRUEN",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Grüne ampel",
+      "writable": true,
+      "allowed_values": null,
+      "expected_feedback": []
+    },
+    {
+      "symbol": ".BAMPELROT",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Rote ampel",
+      "writable": true,
+      "allowed_values": null,
+      "expected_feedback": []
+    },
+    {
       "symbol": ".BTEST",
       "data_type": "BOOL",
       "role": "actuator",

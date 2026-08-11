@@ -1,1 +1,1 @@
-"""Eigenständiges Projekt ADS_KI_Maschinensteuerung."""
+"""Control components for the ADS KI Maschinensteuerung POC."""
