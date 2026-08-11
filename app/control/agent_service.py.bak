@@ -29,9 +29,9 @@ from .wakeup import WakeResult, wait_for_ack, wait_for_timer
 
 DEFAULT_LIMITS: dict[str, Any] = {
     # bestehende Felder (unveraendert)
-    "max_steps":              800,
-    "max_writes_per_job":     800,
-    "max_writes_per_minute":  50,
+    "max_steps":              8,
+    "max_writes_per_job":     8,
+    "max_writes_per_minute":  10,
     "job_timeout_seconds":    120.0,
     "max_wait_seconds":       10.0,
     "max_identical_decisions": 2,

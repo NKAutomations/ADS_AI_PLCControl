@@ -1,0 +1,84 @@
+{
+  "version": "1.0.0",
+  "machine_name": "Ampelsteuerung",
+  "enabled": true,
+  "min_confidence": 0.85,
+  "max_response_age_seconds": 15,
+  "max_writes_per_minute": 60,
+  "symbols": [
+    {
+      "symbol": "GVL.bRot",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Rotes Licht einschalten (True=ein, False=aus)",
+      "writable": true,
+      "allowed_values": [false, true],
+      "expected_feedback": []
+    },
+    {
+      "symbol": "GVL.bGelb",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Gelbes Licht einschalten (True=ein, False=aus)",
+      "writable": true,
+      "allowed_values": [false, true],
+      "expected_feedback": []
+    },
+    {
+      "symbol": "GVL.bGruen",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Gruenes Licht einschalten (True=ein, False=aus)",
+      "writable": true,
+      "allowed_values": [false, true],
+      "expected_feedback": []
+    },
+    {
+      "symbol": "GVL.bTasterGruen",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "Taster Gruen anfordern (True=gedrueckt)",
+      "writable": false,
+      "allowed_values": null,
+      "expected_feedback": []
+    },
+    {
+      "symbol": "GVL.bFehler",
+      "data_type": "BOOL",
+      "role": "fault_signal",
+      "description": "Fehlermerker aktiv (True=Stoerung). Bei True muss die KI decision=fault setzen.",
+      "writable": false,
+      "allowed_values": null,
+      "expected_feedback": []
+    },
+    {
+      "symbol": "GVL.bFehlerQuitt",
+      "data_type": "BOOL",
+      "role": "fault_ack",
+      "description": "Fehlerquittierung (True=quittiert). Wird vom Bediener oder der SPS gesetzt. Die KI darf dieses Symbol NICHT schreiben.",
+      "writable": false,
+      "allowed_values": null,
+      "expected_feedback": []
+    }
+  ],
+  "execution": {
+    "required_true": [],
+    "required_false": [],
+    "mode_symbol": null,
+    "allowed_modes": [],
+    "mode_values": {}
+  },
+  "agent": {
+    "max_steps": 20,
+    "max_writes_per_job": 200,
+    "max_writes_per_minute": 60,
+    "job_timeout_seconds": 3600.0,
+    "max_wait_seconds": 25.0,
+    "max_identical_decisions": 3,
+    "loop_mode": true,
+    "max_cycles": 0,
+    "cycle_timeout_seconds": 86400.0,
+    "ack_timeout_seconds": 300.0,
+    "ack_poll_interval": 0.5
+  }
+}

@@ -1,357 +1,730 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ADS_KI_Maschinensteuerung</title>
-  <style>
-    :root {
-      --bg: #101418;
-      --panel: #171d23;
-      --panel-2: #1d252d;
-      --line: #33404b;
-      --text: #edf2f5;
-      --muted: #aab7c1;
-      --accent: #67d3a5;
-      --warn: #f0bd67;
-      --danger: #f27d7d;
-      --info: #7fb6ee;
-      --radius: 12px;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: radial-gradient(circle at 90% 0%, #1b3032 0, transparent 35%), var(--bg);
-      color: var(--text);
-      font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    header {
-      border-bottom: 1px solid var(--line);
-      padding: 24px clamp(18px, 4vw, 56px) 20px;
-      background: rgba(16, 20, 24, .9);
-    }
-    header h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); letter-spacing: -.04em; }
-    header p { color: var(--muted); margin: 7px 0 0; max-width: 800px; }
-    main { max-width: 1500px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 42px) 60px; }
-    .grid { display: grid; gap: 16px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
-    .panel { grid-column: span 6; background: rgba(23,29,35,.96); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-width: 0; }
-    .panel.wide { grid-column: span 12; }
-    .panel.third { grid-column: span 4; }
-    @media (max-width: 900px) { .panel, .panel.third { grid-column: span 12; } }
-    h2 { margin: 0 0 14px; font-size: 18px; letter-spacing: -.02em; }
-    h3 { margin: 18px 0 8px; font-size: 15px; color: var(--accent); }
-    .eyebrow { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; margin-bottom: 5px; }
-    .fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-    .fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    @media (max-width: 620px) { .fields, .fields.two { grid-template-columns: 1fr; } }
-    label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
-    input, textarea, select, button {
-      font: inherit; border-radius: 8px; border: 1px solid var(--line); color: var(--text);
-    }
-    input, textarea, select { background: #11171c; padding: 9px 10px; width: 100%; }
-    textarea { min-height: 130px; resize: vertical; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; }
-    button { background: var(--panel-2); padding: 9px 13px; cursor: pointer; }
-    button:hover { border-color: var(--accent); }
-    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    button.primary { background: #245844; border-color: #3c936d; }
-    button.danger { border-color: #945555; color: #ffd0d0; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .statusbar { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-bottom: 16px; }
-    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; font-size: 12px; color: var(--muted); }
-    .pill.ok { border-color: #3e8e6c; color: var(--accent); }
-    .pill.warn { border-color: #9a773d; color: var(--warn); }
-    .pill.bad { border-color: #945555; color: var(--danger); }
-    .notice { border-left: 3px solid var(--warn); background: #282319; padding: 10px 12px; color: #f4dcae; margin-bottom: 15px; }
-    .muted { color: var(--muted); }
-    .small { font-size: 12px; }
-    .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
-    .progress { background: #11171c; border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 54px; }
-    .step-list { display: grid; gap: 10px; margin-top: 12px; }
-    .step { border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: #141a1f; }
-    .step-head { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
-    .step-title { font-weight: 700; }
-    .step pre, pre.result { white-space: pre-wrap; overflow-wrap: anywhere; margin: 9px 0 0; color: #c8d4dc; font-size: 12px; }
-    .step details { margin-top: 8px; }
-    summary { cursor: pointer; color: var(--info); font-size: 12px; }
-    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
-    table { border-collapse: collapse; width: 100%; min-width: 720px; }
-    th, td { border-bottom: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; font-size: 12px; }
-    th { color: var(--muted); background: #12181d; position: sticky; top: 0; }
-    tr:last-child td { border-bottom: 0; }
-    .check { display: flex; align-items: center; gap: 8px; color: var(--text); }
-    .check input { width: auto; }
-    #toast { position: fixed; right: 18px; bottom: 18px; max-width: 420px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: #202932; display: none; box-shadow: 0 8px 30px #0008; }
-    #toast.show { display: block; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADS_KI_Maschinensteuerung</title>
+<style>
+  :root {
+    --bg:#f5f5f5; --card:#fff; --border:#ddd; --text:#222;
+    --blue:#1a6fc4; --green:#1a8a3c; --red:#c0392b; --orange:#d35400;
+    --yellow:#b8860b; --grey:#666;
+    --status-running:#1a6fc4; --status-wait:#b8860b; --status-ack:#d35400;
+    --status-fault:#d35400; --status-ok:#1a8a3c; --status-err:#c0392b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;font-size:14px;background:var(--bg);color:var(--text)}
+  header{background:var(--blue);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px}
+  header h1{font-size:16px;font-weight:600}
+  #statusbar{display:flex;gap:16px;font-size:12px;margin-left:auto;flex-wrap:wrap}
+  .sb{padding:2px 8px;border-radius:3px;background:rgba(255,255,255,.15)}
+  .sb.ok{background:rgba(100,220,100,.3)} .sb.err{background:rgba(220,80,80,.3)}
+  main{display:grid;grid-template-columns:340px 1fr;gap:0;height:calc(100vh - 44px)}
+  aside{background:var(--card);border-right:1px solid var(--border);overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+  section{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+  section h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;background:#f0f0f0;border-bottom:1px solid var(--border);color:var(--grey)}
+  .body{padding:12px}
+  label{display:block;font-size:12px;color:var(--grey);margin-bottom:2px;margin-top:8px}
+  label:first-child{margin-top:0}
+  input,select,textarea{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:3px;font-size:13px;font-family:inherit}
+  textarea{resize:vertical;min-height:60px}
+  .row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  button{padding:5px 12px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:13px;white-space:nowrap}
+  button:hover{background:#f0f0f0}
+  button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+  button.primary:hover{background:#155a9e}
+  button.danger{background:var(--red);color:#fff;border-color:var(--red)}
+  button.danger:hover{background:#a93226}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .msg{font-size:12px;margin-top:6px;padding:4px 8px;border-radius:3px;background:#f0f0f0;color:var(--grey);word-break:break-word}
+  .msg.ok{background:#e8f5e9;color:#1a8a3c} .msg.err{background:#fdecea;color:#c0392b}
+  /* Rechte Seite */
+  #right{display:flex;flex-direction:column;overflow:hidden}
+  #tabs{display:flex;border-bottom:1px solid var(--border);background:#f8f8f8}
+  .tab{padding:8px 16px;cursor:pointer;font-size:13px;border-bottom:2px solid transparent;color:var(--grey)}
+  .tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
+  .tabcontent{display:none;flex:1;overflow-y:auto;padding:16px}
+  .tabcontent.active{display:block}
+  /* Prozessstatus-Box */
+  #proc-box{border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px;background:#fafafa}
+  #proc-box.running{border-color:var(--status-running);background:#e8f0fb}
+  #proc-box.waiting_for_timer,#proc-box.waiting_for_event{border-color:var(--status-wait);background:#fef9e7}
+  #proc-box.waiting_for_ack,#proc-box.fault{border-color:var(--status-ack);background:#fef0e7}
+  #proc-box.completed{border-color:var(--status-ok);background:#e8f5e9}
+  #proc-box.failed,#proc-box.aborted{border-color:var(--status-err);background:#fdecea}
+  .proc-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .proc-status{font-weight:700;font-size:13px}
+  .proc-meta{display:flex;gap:16px;font-size:12px;color:var(--grey);flex-wrap:wrap}
+  .proc-meta span{white-space:nowrap}
+  .proc-summary{font-size:13px;margin-top:6px;font-style:italic;color:#444}
+  .proc-wake{font-size:12px;margin-top:4px;color:var(--orange)}
+  /* Schrittprotokoll */
+  #steps-log{font-size:12px}
+  .step-entry{border-left:3px solid var(--border);padding:6px 10px;margin-bottom:6px;background:#fff;border-radius:0 3px 3px 0}
+  .step-entry.executed{border-left-color:var(--green)}
+  .step-entry.completed{border-left-color:var(--green);background:#e8f5e9}
+  .step-entry.waiting{border-left-color:var(--yellow)}
+  .step-entry.waiting_for_ack{border-left-color:var(--orange)}
+  .step-entry.fault_detected{border-left-color:var(--red)}
+  .step-entry.fault_acknowledged{border-left-color:var(--green)}
+  .step-entry.failed{border-left-color:var(--red);background:#fdecea}
+  .step-entry.cycle_completed{border-left-color:var(--blue);background:#e8f0fb;font-weight:600}
+  .step-hdr{font-weight:600;margin-bottom:2px}
+  .step-detail{color:var(--grey);margin-top:2px}
+  /* Variablen-Editor */
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{background:#f0f0f0;padding:5px 8px;text-align:left;border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap}
+  td{padding:4px 8px;border-bottom:1px solid #eee;vertical-align:middle}
+  td input,td select{padding:2px 4px;font-size:12px}
+  tr:hover td{background:#fafafa}
+  /* Snapshot */
+  .snap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+  .snap-card{border:1px solid var(--border);border-radius:4px;padding:8px;background:#fff}
+  .snap-sym{font-size:11px;color:var(--grey);word-break:break-all}
+  .snap-val{font-size:18px;font-weight:700;margin:4px 0}
+  .snap-val.bool-true{color:var(--green)} .snap-val.bool-false{color:var(--red)}
+  .snap-role{font-size:11px;color:var(--grey)}
+  /* Sicherheitshinweis */
+  .safety{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:8px 12px;font-size:12px;color:#856404}
+</style>
 </head>
 <body>
+
 <header>
-  <div class="eyebrow">ADS_KI_Maschinensteuerung</div>
-  <h1>Kontrollierte Maschinenaufträge</h1>
-  <p>Mehrstufige KI-Unterstützung für einen nicht echtzeitfähigen TwinCAT-POC. Jede Schreibaktion bleibt durch Maschinenbeschreibung, Bedienerfreigabe, Rücklesen und Feedbackprüfung begrenzt.</p>
+  <h1>ADS_KI_Maschinensteuerung</h1>
+  <div id="statusbar">
+    <span class="sb" id="sb-ads">ADS: unbekannt</span>
+    <span class="sb" id="sb-write">Schreibfreigabe: aus</span>
+    <span class="sb" id="sb-job">Auftrag: keiner</span>
+    <span class="sb" id="sb-machine">Maschine: unbekannt</span>
+  </div>
 </header>
+
 <main>
-  <div class="notice"><strong>Sicherheitsgrenze:</strong> Diese Anwendung ersetzt keine Sicherheitssteuerung, keinen Not-Aus, keine Schutzfunktion, keinen schnellen Regelkreis und keine zeitkritische Motion-Control-Funktion.</div>
-  <div class="statusbar">
-    <span id="adsPill" class="pill">ADS: unbekannt</span>
-    <span id="writePill" class="pill">Schreibfreigabe: aus</span>
-    <span id="jobPill" class="pill">Auftrag: keiner</span>
-    <span id="machinePill" class="pill">Maschine: unbekannt</span>
-    <span id="message" class="muted small"></span>
+<!-- ═══════════════════════════════ LINKE SEITE ═══════════════════════════ -->
+<aside>
+
+  <div class="safety">
+    <strong>Sicherheitsgrenze:</strong> Diese Anwendung ersetzt keine Sicherheitssteuerung,
+    keinen Not-Aus, keine Schutzfunktion, keinen schnellen Regelkreis und keine
+    zeitkritische Motion-Control-Funktion.
   </div>
 
-  <section class="grid">
-    <article class="panel third">
-      <div class="eyebrow">Verbindung</div>
-      <h2>ADS-Verbindung</h2>
-      <div class="fields">
-        <label>Host / IP<input id="adsHost" autocomplete="off"></label>
-        <label>AMS Net ID<input id="adsAms" autocomplete="off"></label>
-        <label>ADS-Port<input id="adsPort" type="number" value="851"></label>
+  <!-- ADS-Verbindung -->
+  <section>
+    <h2>ADS-Verbindung</h2>
+    <div class="body">
+      <label>Host / IP</label>
+      <input id="ads-host" placeholder="127.0.0.1">
+      <label>AMS Net ID</label>
+      <input id="ads-amsid" placeholder="127.0.0.1.1.1">
+      <label>ADS-Port</label>
+      <input id="ads-port" placeholder="851" type="number">
+      <div class="row">
+        <button class="primary" onclick="adsConnect()">Verbinden</button>
+        <button onclick="adsDisconnect()">Trennen</button>
+        <button onclick="loadSymbols()">Symbole laden</button>
+        <button onclick="readValues()">Werte lesen</button>
       </div>
-      <div class="actions">
-        <button id="connectBtn" class="primary">Verbinden</button>
-        <button id="disconnectBtn" class="danger">Trennen</button>
-        <button id="symbolsBtn">Symbole laden</button>
-        <button id="readBtn">Werte lesen</button>
-      </div>
-      <p id="connectionText" class="muted small">Noch nicht verbunden.</p>
-    </article>
-
-    <article class="panel third">
-      <div class="eyebrow">Lokales Modell</div>
-      <h2>LM Studio</h2>
-      <div class="fields two">
-        <label>Lokale URL<input id="llmUrl" value="http://127.0.0.1:1234/v1"></label>
-        <label>Modell-ID<input id="llmModel"></label>
-      </div>
-      <div class="actions"><button id="llmCheckBtn">LM Studio prüfen</button><button id="settingsBtn">Einstellungen speichern</button></div>
-      <p id="llmText" class="muted small">Noch nicht geprüft.</p>
-    </article>
-
-    <article class="panel third">
-      <div class="eyebrow">Bedienerfreigabe</div>
-      <h2>Schreibmodus</h2>
-      <label class="check"><input id="writeEnable" type="checkbox"> Schreibzugriffe bewusst freigeben</label>
-      <p class="muted small">Beim Programmstart ist die Freigabe aus. Sie wird nicht von der KI aktiviert und kann während eines laufenden Auftrags widerrufen werden.</p>
-      <p id="machineText" class="muted small">Maschinenbeschreibung nicht geladen.</p>
-    </article>
-
-    <article class="panel wide">
-      <div class="eyebrow">Maschinenbeschreibung</div>
-      <h2>Konfiguration prüfen und speichern</h2>
-      <p class="muted small">Die JSON-Beschreibung ist die verbindliche Whitelist. Keine neuen ADS-Symbole aus dem Chat oder aus der KI-Antwort übernehmen.</p>
-      <textarea id="machineJson" spellcheck="false" aria-label="Maschinenbeschreibung als JSON"></textarea>
-      <div class="actions"><button id="machineSaveBtn" class="primary">Maschinenbeschreibung speichern</button><button id="machineFormatBtn">JSON formatieren</button></div>
-    </article>
-
-    <article class="panel wide">
-      <div class="eyebrow">Steuerauftrag</div>
-      <h2>Ein Auftrag, viele kontrollierte Schritte</h2>
-      <label>Benutzerbefehl<textarea id="command" placeholder="Beispiel: Fahre die Maschine in Grundstellung."></textarea></label>
-      <div class="actions">
-        <button id="commandBtn" class="primary">Auftrag ausführen</button>
-        <button id="stopPollBtn">Statusabfrage pausieren</button>
-      </div>
-      <p id="commandText" class="muted small">Noch kein Auftrag gestartet.</p>
-      <div id="progress" class="progress muted">Der laufende Auftrag erscheint hier mit jedem geprüften Schritt.</div>
-      <div id="steps" class="step-list"></div>
-      <pre id="result" class="result"></pre>
-    </article>
-
-    <article class="panel wide">
-      <div class="eyebrow">Variablen-Editor</div>
-      <h2>Variablen auswählen und beschreiben</h2>
-      <p class="muted small">Nur markierte Variablen werden in die Maschinenbeschreibung übernommen und an die KI übertragen. ADS-Symbolname und Datentyp bleiben unverändert; Beschreibung, Rolle, Schreibfreigabe und erwartetes Feedback können bearbeitet werden.</p>
-      <div class="actions">
-        <button id="selectAllBtn">Alle auswählen</button>
-        <button id="selectNoneBtn">Alle abwählen</button>
-        <button id="variableSaveBtn" class="primary">Variablenkonfiguration speichern</button>
-      </div>
-      <div id="variableEditor" class="table-wrap muted small">Zuerst ADS-Symbole laden.</div>
-    </article>
-
-    <article class="panel wide">
-      <div class="eyebrow">ADS-Symbole</div>
-      <h2>Technische Symbolübersicht</h2>
-      <div id="symbols" class="muted small">Noch keine Symbole geladen.</div>
-    </article>
-
-    <article class="panel wide">
-      <div class="eyebrow">Snapshot</div>
-      <h2>Aktuelle konfigurierte Werte</h2>
-      <div id="values" class="muted small">Noch keine Werte gelesen.</div>
-    </article>
+      <div class="msg" id="ads-msg">Noch nicht verbunden.</div>
+    </div>
   </section>
+
+  <!-- LM Studio -->
+  <section>
+    <h2>LM Studio</h2>
+    <div class="body">
+      <label>Lokale URL</label>
+      <input id="llm-url" placeholder="http://127.0.0.1:1234/v1">
+      <label>Modell-ID</label>
+      <input id="llm-model" placeholder="local-model">
+      <div class="row">
+        <button onclick="checkLlm()">LM Studio prüfen</button>
+        <button onclick="saveSettings()">Einstellungen speichern</button>
+      </div>
+      <div class="msg" id="llm-msg">Noch nicht geprüft.</div>
+    </div>
+  </section>
+
+  <!-- Schreibfreigabe -->
+  <section>
+    <h2>Bedienerfreigabe</h2>
+    <div class="body">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+        <input type="checkbox" id="write-enable" onchange="toggleWrite()" style="width:auto">
+        Schreibzugriffe bewusst freigeben
+      </label>
+      <div class="msg" style="margin-top:8px">
+        Beim Programmstart ist die Freigabe aus. Sie wird nicht von der KI aktiviert
+        und kann während eines laufenden Auftrags widerrufen werden.
+      </div>
+    </div>
+  </section>
+
+  <!-- Maschinenbeschreibung -->
+  <section>
+    <h2>Maschinenbeschreibung</h2>
+    <div class="body">
+      <div class="msg" id="machine-status">Maschinenbeschreibung nicht geladen.</div>
+      <textarea id="machine-json" rows="6" placeholder='{"machine_name":"...","enabled":true,...}'></textarea>
+      <div class="row">
+        <button class="primary" onclick="saveMachine()">Speichern</button>
+        <button onclick="formatMachineJson()">JSON formatieren</button>
+      </div>
+      <div class="msg" id="machine-msg"></div>
+    </div>
+  </section>
+
+</aside>
+
+<!-- ═══════════════════════════════ RECHTE SEITE ══════════════════════════ -->
+<div id="right">
+  <div id="tabs">
+    <div class="tab active" onclick="showTab('tab-command')">Steuerauftrag</div>
+    <div class="tab" onclick="showTab('tab-vars')">Variablen-Editor</div>
+    <div class="tab" onclick="showTab('tab-symbols')">ADS-Symbole</div>
+    <div class="tab" onclick="showTab('tab-snapshot')">Snapshot</div>
+  </div>
+
+  <!-- ── Steuerauftrag ─────────────────────────────────────────────────── -->
+  <div class="tabcontent active" id="tab-command">
+
+    <!-- Prozessstatus-Box -->
+    <div id="proc-box">
+      <div class="proc-header">
+        <span class="proc-status" id="proc-status">Kein Auftrag</span>
+      </div>
+      <div class="proc-meta" id="proc-meta"></div>
+      <div class="proc-summary" id="proc-summary"></div>
+      <div class="proc-wake" id="proc-wake"></div>
+    </div>
+
+    <!-- Befehlseingabe -->
+    <section>
+      <h2>Benutzerbefehl</h2>
+      <div class="body">
+        <textarea id="command-input" rows="3" placeholder="Beispiel: Fahre die Maschine in Grundstellung."></textarea>
+        <div class="row">
+          <button class="primary" id="btn-start" onclick="startCommand()">Auftrag ausführen</button>
+          <button class="danger" id="btn-stop" onclick="stopCommand()" style="display:none">⏹ Auftrag stoppen</button>
+          <button id="btn-pause-poll" onclick="togglePoll()">Statusabfrage pausieren</button>
+        </div>
+        <div class="msg" id="command-msg">Noch kein Auftrag gestartet.</div>
+      </div>
+    </section>
+
+    <!-- Schrittprotokoll -->
+    <section style="margin-top:12px">
+      <h2>Schrittprotokoll</h2>
+      <div class="body">
+        <div id="steps-log">Der laufende Auftrag erscheint hier mit jedem geprüften Schritt.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── Variablen-Editor ──────────────────────────────────────────────── -->
+  <div class="tabcontent" id="tab-vars">
+    <section>
+      <h2>Variablen auswählen und beschreiben</h2>
+      <div class="body">
+        <p style="font-size:12px;color:var(--grey);margin-bottom:8px">
+          Nur markierte Variablen werden in die Maschinenbeschreibung übernommen.
+          ADS-Symbolname und Datentyp bleiben unverändert.
+          Neue Rollen: <strong>fault_signal</strong> (Fehlermerker),
+          <strong>fault_ack</strong> (Quittierungssignal — wird nie von der KI geschrieben).
+        </p>
+        <div class="row" style="margin-bottom:8px">
+          <button onclick="selectAll(true)">Alle auswählen</button>
+          <button onclick="selectAll(false)">Alle abwählen</button>
+          <button class="primary" onclick="saveVarConfig()">Variablenkonfiguration speichern</button>
+        </div>
+        <div class="msg" id="vars-msg"></div>
+        <div style="overflow-x:auto">
+          <table id="vars-table">
+            <thead>
+              <tr>
+                <th>✓</th><th>Symbol</th><th>Typ</th><th>Beschreibung</th>
+                <th>Rolle</th><th>Schreiben</th><th>Erlaubte Werte</th>
+              </tr>
+            </thead>
+            <tbody id="vars-body">
+              <tr><td colspan="7" style="color:var(--grey);padding:12px">Zuerst ADS-Symbole laden.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── ADS-Symbole ───────────────────────────────────────────────────── -->
+  <div class="tabcontent" id="tab-symbols">
+    <section>
+      <h2>Technische Symbolübersicht</h2>
+      <div class="body">
+        <div id="symbols-list" style="font-size:12px;color:var(--grey)">Noch keine Symbole geladen.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ── Snapshot ─────────────────────────────────────────────────────── -->
+  <div class="tabcontent" id="tab-snapshot">
+    <section>
+      <h2>Aktuelle konfigurierte Werte</h2>
+      <div class="body">
+        <div class="row" style="margin-bottom:8px">
+          <button onclick="readValues()">Werte lesen</button>
+        </div>
+        <div class="snap-grid" id="snap-grid">
+          <div style="color:var(--grey);font-size:12px">Noch keine Werte gelesen.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</div><!-- #right -->
 </main>
-<div id="toast" role="status" aria-live="polite"></div>
+
 <script>
-(() => {
-  const $ = id => document.getElementById(id);
-  let poll = true;
-  let lastStepKey = "";
+// ═══════════════════════════════════════════════════════════════════════════
+// Zustand
+// ═══════════════════════════════════════════════════════════════════════════
+let allSymbols = [];
+let machineConfig = null;
+let pollInterval = null;
+let pollPaused = false;
+let lastStepCount = 0;
+let renderedEventCount = 0;
 
-  function toast(text, bad = false) {
-    const el = $("toast");
-    el.textContent = text;
-    el.style.borderColor = bad ? "#945555" : "#3e8e6c";
-    el.classList.add("show");
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => el.classList.remove("show"), 3800);
-  }
-  async function api(path, options = {}) {
-    const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
-    const data = await res.json().catch(() => ({ ok: false, message: "Ungültige Serverantwort" }));
-    if (!res.ok && data.ok !== false) data.ok = false;
-    return data;
-  }
-  function setPill(id, text, cls = "") {
-    const el = $(id); el.textContent = text; el.className = "pill " + cls;
-  }
-  function pretty(value) {
-    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
-  }
-  let loadedSymbols = [];
-  function renderVariableEditor(machine = {}) {
-    const configured = new Map((machine.symbols || []).map(item => [item.symbol, item]));
-    const items = loadedSymbols || [];
-    if (!items.length) { $("variableEditor").textContent = "Zuerst ADS-Symbole laden."; return; }
-    const wrap = document.createElement("div"); wrap.className = "table-wrap";
-    const table = document.createElement("table");
-    table.innerHTML = "<thead><tr><th>Verwenden</th><th>ADS-Symbol</th><th>Typ</th><th>ADS-Kommentar</th><th>Eigene Beschreibung</th><th>Rolle</th><th>Schreiben</th><th>Erlaubte Werte</th><th>Erwartetes Feedback</th></tr></thead>";
-    const body = document.createElement("tbody");
-    items.forEach(item => {
-      const spec = configured.get(item.name) || { symbol: item.name, data_type: item.data_type, role: "state", description: item.comment || "", writable: false, allowed_values: null, expected_feedback: [] };
-      const tr = document.createElement("tr");
-      const use = document.createElement("input"); use.type = "checkbox"; use.className = "var-use"; use.checked = configured.has(item.name); use.dataset.symbol = item.name;
-      const useTd = document.createElement("td"); useTd.appendChild(use); tr.appendChild(useTd);
-      [item.name, item.data_type, item.comment || ""].forEach(value => { const td = document.createElement("td"); td.textContent = value; tr.appendChild(td); });
-      const desc = document.createElement("input"); desc.className = "var-description"; desc.value = spec.description || ""; desc.dataset.symbol = item.name; const descTd = document.createElement("td"); descTd.appendChild(desc); tr.appendChild(descTd);
-      const role = document.createElement("select"); role.className = "var-role"; role.dataset.symbol = item.name; ["sensor", "actuator", "feedback", "state", "mode", "permission", "interlock"].forEach(value => { const option = document.createElement("option"); option.value = value; option.textContent = value; option.selected = (spec.role || "state") === value; role.appendChild(option); }); const roleTd = document.createElement("td"); roleTd.appendChild(role); tr.appendChild(roleTd);
-      const writable = document.createElement("input"); writable.type = "checkbox"; writable.className = "var-writable"; writable.checked = spec.writable === true; writable.dataset.symbol = item.name; const writeTd = document.createElement("td"); writeTd.appendChild(writable); tr.appendChild(writeTd);
-      const allowed = document.createElement("input"); allowed.className = "var-allowed"; allowed.dataset.symbol = item.name; allowed.value = spec.allowed_values == null ? "" : JSON.stringify(spec.allowed_values); allowed.placeholder = "z. B. [false,true]"; const allowedTd = document.createElement("td"); allowedTd.appendChild(allowed); tr.appendChild(allowedTd);
-      const feedback = document.createElement("input"); feedback.className = "var-feedback"; feedback.dataset.symbol = item.name; feedback.value = spec.expected_feedback?.length ? JSON.stringify(spec.expected_feedback) : ""; feedback.placeholder = '[{"symbol":"...","value":true}]'; const feedbackTd = document.createElement("td"); feedbackTd.appendChild(feedback); tr.appendChild(feedbackTd);
-      body.appendChild(tr);
-    });
-    table.appendChild(body); wrap.appendChild(table); $("variableEditor").replaceChildren(wrap);
-  }
-  function renderSymbols(items) {
-    loadedSymbols = items || [];
-    renderVariableEditor(window.currentMachine || {});
-    if (!items || !items.length) { $("symbols").textContent = "Keine Symbole geladen."; return; }
-    const wrap = document.createElement("div"); wrap.className = "table-wrap";
-    const table = document.createElement("table");
-    table.innerHTML = "<thead><tr><th>Symbol</th><th>Typ</th><th>Kommentar</th><th>Unterstützt</th></tr></thead>";
-    const body = document.createElement("tbody");
-    items.forEach(item => {
-      const tr = document.createElement("tr");
-      [item.name, item.tc_type || item.data_type, item.comment || "", item.supported === false ? "nein" : "ja"].forEach(v => { const td = document.createElement("td"); td.textContent = String(v ?? ""); tr.appendChild(td); });
-      body.appendChild(tr);
-    });
-    table.appendChild(body); wrap.appendChild(table); $("symbols").replaceChildren(wrap);
-  }
-  function renderValues(items) {
-    if (!items || !items.length) { $("values").textContent = "Keine Werte gelesen."; return; }
-    const wrap = document.createElement("div"); wrap.className = "table-wrap";
-    const table = document.createElement("table"); table.innerHTML = "<thead><tr><th>Symbol</th><th>Wert</th><th>Gültig</th><th>Fehler</th></tr></thead>";
-    const body = document.createElement("tbody");
-    items.forEach(item => {
-      const tr = document.createElement("tr");
-      [item.symbol, pretty(item.value), item.valid ? "ja" : "nein", item.error || ""].forEach(v => { const td = document.createElement("td"); td.textContent = String(v ?? ""); tr.appendChild(td); });
-      body.appendChild(tr);
-    });
-    table.appendChild(body); wrap.appendChild(table); $("values").replaceChildren(wrap);
-  }
-  function renderStep(step, index) {
-    const box = document.createElement("article"); box.className = "step";
-    const head = document.createElement("div"); head.className = "step-head";
-    const title = document.createElement("div"); title.className = "step-title"; title.textContent = `Schritt ${step.step ?? index + 1}: ${step.status || step.event || "Status"}`;
-    const stamp = document.createElement("span"); stamp.className = "pill"; stamp.textContent = step.started_at || "laufend";
-    head.append(title, stamp); box.appendChild(head);
-    const response = step.response || step.decision;
-    if (response) { const p = document.createElement("p"); p.className = "small"; p.textContent = response.summary || response.decision || "KI-Entscheidung empfangen"; box.appendChild(p); }
-    if (step.write) { const p = document.createElement("p"); p.className = "small mono"; p.textContent = `ADS: ${step.write.symbol} = ${pretty(step.write.requested)} | Rücklesen: ${pretty(step.write.actual)} | ok=${step.write.readback_ok}`; box.appendChild(p); }
-    if (step.errors?.length) { const p = document.createElement("p"); p.className = "small"; p.style.color = "var(--danger)"; p.textContent = "Fehler: " + step.errors.join(" | "); box.appendChild(p); }
-    const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = "Technische Schrittinformationen anzeigen"; details.appendChild(summary);
-    const pre = document.createElement("pre"); pre.textContent = pretty(step); details.appendChild(pre); box.appendChild(details);
-    return box;
-  }
-  function renderStatus(data) {
-    const running = !!data.running;
-    setPill("jobPill", running ? `Auftrag läuft: ${data.job_id || ""}` : (data.result ? `Auftrag: ${data.result.status || "beendet"}` : "Auftrag: keiner"), running ? "warn" : (data.result?.ok ? "ok" : ""));
-    $("commandText").textContent = data.command ? `Befehl: ${data.command}` : "Noch kein Auftrag gestartet.";
-    const progress = data.progress || {};
-    $("progress").textContent = progress.last_event ? `Aktueller Status: ${progress.event || "progress"} | Schritt ${progress.step ?? 0}` : (running ? "Auftrag läuft ..." : "Kein laufender Auftrag.");
-    const source = data.result?.steps || progress.steps || [];
-    const key = JSON.stringify(source.map(x => [x.step, x.status, x.event, x.write?.symbol]));
-    if (key !== lastStepKey) { lastStepKey = key; $("steps").replaceChildren(...source.map(renderStep)); }
-    if (data.result) $("result").textContent = pretty(data.result);
-    $("commandBtn").disabled = running;
-  }
-  async function refreshState() {
-    try {
-      const data = await api("/api/state");
-      setPill("adsPill", data.ads_connected ? "ADS: verbunden" : "ADS: nicht verbunden", data.ads_connected ? "ok" : "bad");
-      setPill("writePill", data.write_enabled ? "Schreibfreigabe: aktiv" : "Schreibfreigabe: aus", data.write_enabled ? "warn" : "");
-      setPill("machinePill", `Maschine: ${data.machine?.machine_name || "unbekannt"}`, data.machine?.enabled ? "ok" : "bad");
-      $("writeEnable").checked = !!data.write_enabled;
-      if (data.ads) { $("adsHost").value = data.ads.host || ""; $("adsAms").value = data.ads.ams_net_id || ""; $("adsPort").value = data.ads.port || 851; }
-      if (data.llm) { $("llmUrl").value = data.llm.base_url || "http://127.0.0.1:1234/v1"; $("llmModel").value = data.llm.model || ""; }
-      if (data.machine) { window.currentMachine = data.machine; $("machineText").textContent = `${data.machine.machine_name || "Maschine"} | Version ${data.machine.version || "?"} | aktiv=${data.machine.enabled === true}`; if (!$('machineJson').value) $('machineJson').value = pretty(data.machine); renderVariableEditor(data.machine); }
-    } catch (err) { $("message").textContent = "Status konnte nicht gelesen werden."; }
-  }
-  async function refreshCommand() { if (!poll) return; try { renderStatus(await api("/api/command-status")); } catch {} }
+// ═══════════════════════════════════════════════════════════════════════════
+// Hilfsfunktionen
+// ═══════════════════════════════════════════════════════════════════════════
+async function api(path, method='GET', body=null) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  return r.json();
+}
 
-  $("connectBtn").onclick = async () => { const data = await api("/api/connect", { method: "POST", body: JSON.stringify({ ads: { host: $("adsHost").value.trim(), ams_net_id: $("adsAms").value.trim(), port: Number($("adsPort").value) } }) }); $("connectionText").textContent = data.message || ""; toast(data.message || (data.ok ? "Verbunden" : "Verbindung fehlgeschlagen"), !data.ok); await refreshState(); };
-  $("disconnectBtn").onclick = async () => { const data = await api("/api/disconnect", { method: "POST", body: "{}" }); toast(data.message || (data.ok ? "Getrennt" : "Trennen nicht möglich"), !data.ok); await refreshState(); };
-  $("symbolsBtn").onclick = async () => { const data = await api("/api/symbols", { method: "POST", body: "{}" }); renderSymbols(data.symbols); toast(data.message || `${data.symbols?.length || 0} Symbole geladen`, !data.ok); };
-  $("selectAllBtn").onclick = () => document.querySelectorAll(".var-use").forEach(input => { input.checked = true; });
-  $("selectNoneBtn").onclick = () => document.querySelectorAll(".var-use").forEach(input => { input.checked = false; });
-  $("variableSaveBtn").onclick = async () => {
-    try {
-      const old = window.currentMachine || {};
-      const symbols = [];
-      for (const use of document.querySelectorAll(".var-use")) {
-        if (!use.checked) continue;
-        const symbol = use.dataset.symbol;
-        const technical = loadedSymbols.find(item => item.name === symbol) || {};
-        const parseOptional = (selector, fallback) => {
-          const value = document.querySelector(`${selector}[data-symbol="${CSS.escape(symbol)}"]`)?.value?.trim();
-          if (!value) return fallback;
-          return JSON.parse(value);
-        };
-        const role = document.querySelector(`.var-role[data-symbol="${CSS.escape(symbol)}"]`).value;
-        const writable = document.querySelector(`.var-writable[data-symbol="${CSS.escape(symbol)}"]`).checked;
-        symbols.push({
-          symbol,
-          data_type: technical.data_type,
-          role,
-          description: document.querySelector(`.var-description[data-symbol="${CSS.escape(symbol)}"]`).value.trim() || technical.comment || symbol,
-          writable,
-          allowed_values: parseOptional(".var-allowed", null),
-          expected_feedback: parseOptional(".var-feedback", []),
-        });
-      }
-      const next = { ...old, symbols };
-      const data = await api("/api/machine", { method: "POST", body: JSON.stringify(next) });
-      if (!data.ok) return toast(data.message || "Speichern fehlgeschlagen", true);
-      window.currentMachine = data.machine; $("machineJson").value = pretty(data.machine); renderVariableEditor(data.machine); toast("Variablenkonfiguration gespeichert");
-    } catch (err) { toast(`Variablenkonfiguration ungültig: ${err.message}`, true); }
+function setMsg(id, text, cls='') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'msg' + (cls ? ' ' + cls : '');
+}
+
+function showTab(id) {
+  document.querySelectorAll('.tabcontent').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx = ['tab-command','tab-vars','tab-symbols','tab-snapshot'].indexOf(id);
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADS
+// ═══════════════════════════════════════════════════════════════════════════
+async function adsConnect() {
+  const r = await api('/api/connect', 'POST', {
+    ads: {
+      host:       document.getElementById('ads-host').value,
+      ams_net_id: document.getElementById('ads-amsid').value,
+      port:       parseInt(document.getElementById('ads-port').value) || 851,
+    }
+  });
+  setMsg('ads-msg', r.message, r.ok ? 'ok' : 'err');
+  refreshState();
+}
+
+async function adsDisconnect() {
+  const r = await api('/api/disconnect', 'POST');
+  setMsg('ads-msg', r.ok ? 'Getrennt.' : r.message, r.ok ? '' : 'err');
+  refreshState();
+}
+
+async function loadSymbols() {
+  const r = await api('/api/symbols', 'POST');
+  if (!r.ok) { setMsg('ads-msg', r.message, 'err'); return; }
+  allSymbols = r.symbols || [];
+  renderSymbolList();
+  renderVarsTable();
+  setMsg('ads-msg', `${allSymbols.length} Symbole geladen.`, 'ok');
+}
+
+async function readValues() {
+  const r = await api('/api/read', 'POST');
+  if (!r.ok) return;
+  renderSnapshot(r.values || []);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LM Studio
+// ═══════════════════════════════════════════════════════════════════════════
+async function checkLlm() {
+  const r = await api('/api/llm/check');
+  setMsg('llm-msg', r.message, r.ok ? 'ok' : 'err');
+}
+
+async function saveSettings() {
+  const r = await api('/api/settings', 'POST', {
+    llm: {
+      base_url: document.getElementById('llm-url').value,
+      model:    document.getElementById('llm-model').value,
+    }
+  });
+  setMsg('llm-msg', r.ok ? 'Einstellungen gespeichert.' : 'Fehler.', r.ok ? 'ok' : 'err');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Schreibfreigabe
+// ═══════════════════════════════════════════════════════════════════════════
+async function toggleWrite() {
+  const enabled = document.getElementById('write-enable').checked;
+  await api('/api/write-enable', 'POST', { enabled });
+  refreshState();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Maschinenbeschreibung
+// ═══════════════════════════════════════════════════════════════════════════
+async function saveMachine() {
+  let data;
+  try { data = JSON.parse(document.getElementById('machine-json').value); }
+  catch(e) { setMsg('machine-msg', 'Ungültiges JSON: ' + e.message, 'err'); return; }
+  const r = await api('/api/machine', 'POST', data);
+  setMsg('machine-msg', r.ok ? 'Gespeichert.' : JSON.stringify(r), r.ok ? 'ok' : 'err');
+  if (r.ok) { machineConfig = r.machine; refreshState(); }
+}
+
+function formatMachineJson() {
+  try {
+    const v = JSON.parse(document.getElementById('machine-json').value);
+    document.getElementById('machine-json').value = JSON.stringify(v, null, 2);
+  } catch(e) { setMsg('machine-msg', 'Ungültiges JSON.', 'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Steuerauftrag
+// ═══════════════════════════════════════════════════════════════════════════
+async function startCommand() {
+  const cmd = document.getElementById('command-input').value.trim();
+  if (!cmd) { setMsg('command-msg', 'Kein Befehl eingegeben.', 'err'); return; }
+  lastStepCount = 0;
+  renderedEventCount = 0;
+  document.getElementById('steps-log').innerHTML = '';
+  const r = await api('/api/command', 'POST', { command: cmd });
+  setMsg('command-msg', r.message, r.ok ? 'ok' : 'err');
+  if (r.ok) {
+    document.getElementById('btn-stop').style.display = '';
+    document.getElementById('btn-start').disabled = true;
+    startPoll();
+  }
+}
+
+async function stopCommand() {
+  const r = await api('/api/command/stop', 'POST');
+  setMsg('command-msg', r.message, r.ok ? '' : 'err');
+  document.getElementById('btn-stop').disabled = true;
+}
+
+function togglePoll() {
+  pollPaused = !pollPaused;
+  document.getElementById('btn-pause-poll').textContent =
+    pollPaused ? 'Statusabfrage fortsetzen' : 'Statusabfrage pausieren';
+}
+
+function startPoll() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    if (pollPaused) return;
+    const r = await api('/api/command-status');
+    updateCommandStatus(r);
+    if (!r.running) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+      document.getElementById('btn-stop').style.display = 'none';
+      document.getElementById('btn-stop').disabled = false;
+      document.getElementById('btn-start').disabled = false;
+    }
+  }, 800);
+}
+
+function updateCommandStatus(r) {
+  const session = r.session;
+  const progress = r.progress || {};
+
+  // Prozessstatus-Box
+  const box = document.getElementById('proc-box');
+  const status = session ? session.status : (r.running ? 'running' : 'idle');
+  box.className = status;
+
+  const statusLabels = {
+    created: 'Erstellt', running: 'Läuft', executing: 'Schreibt',
+    waiting_for_timer: '⏳ Warte auf Timer',
+    waiting_for_event: '⏳ Warte auf Ereignis',
+    waiting_for_ack:   '⚠ Warte auf Fehlerquittierung',
+    fault:    '⚠ Störung erkannt',
+    completed:'✓ Abgeschlossen',
+    failed:   '✗ Fehlgeschlagen',
+    aborted:  '✗ Gestoppt',
   };
-  $("readBtn").onclick = async () => { const data = await api("/api/read", { method: "POST", body: "{}" }); renderValues(data.values); toast(data.ok ? "Werte gelesen" : data.message, !data.ok); };
-  $("writeEnable").onchange = async e => { const data = await api("/api/write-enable", { method: "POST", body: JSON.stringify({ enabled: e.target.checked }) }); if (!data.ok) e.target.checked = false; toast(data.message || (data.write_enabled ? "Schreibfreigabe aktiv" : "Schreibfreigabe aus"), !data.ok); await refreshState(); };
-  $("llmCheckBtn").onclick = async () => { const data = await api("/api/llm/check"); $("llmText").textContent = data.message || ""; toast(data.message || "", !data.ok); };
-  $("settingsBtn").onclick = async () => { const data = await api("/api/settings", { method: "POST", body: JSON.stringify({ llm: { base_url: $("llmUrl").value.trim(), model: $("llmModel").value.trim() } }) }); toast(data.ok ? "Einstellungen gespeichert" : data.message, !data.ok); };
-  $("machineFormatBtn").onclick = () => { try { $("machineJson").value = pretty(JSON.parse($("machineJson").value)); toast("JSON formatiert"); } catch (err) { toast("Maschinenbeschreibung ist kein gültiges JSON.", true); } };
-  $("machineSaveBtn").onclick = async () => { try { const parsed = JSON.parse($("machineJson").value); const data = await api("/api/machine", { method: "POST", body: JSON.stringify(parsed) }); toast(data.ok ? "Maschinenbeschreibung gespeichert" : data.message, !data.ok); if (data.machine) $("machineJson").value = pretty(data.machine); await refreshState(); } catch (err) { toast("Maschinenbeschreibung ist kein gültiges JSON.", true); } };
-  $("commandBtn").onclick = async () => { const command = $("command").value.trim(); if (!command) return toast("Bitte einen Benutzerbefehl eingeben.", true); const data = await api("/api/command", { method: "POST", body: JSON.stringify({ command }) }); toast(data.message || "Auftrag gestartet", !data.ok); if (data.ok) { lastStepKey = ""; await refreshCommand(); } };
-  $("stopPollBtn").onclick = e => { poll = !poll; e.target.textContent = poll ? "Statusabfrage pausieren" : "Statusabfrage fortsetzen"; };
+  document.getElementById('proc-status').textContent =
+    statusLabels[status] || status || 'Kein Auftrag';
 
-  refreshState(); refreshCommand();
-  setInterval(refreshState, 4000);
-  setInterval(refreshCommand, 700);
-})();
+  if (session) {
+    document.getElementById('proc-meta').innerHTML =
+      `<span>Zyklus: <b>${session.cycle_count}</b></span>` +
+      `<span>Schritte: <b>${session.total_step_count}</b></span>` +
+      `<span>Schreibvorgänge: <b>${session.total_write_count}</b></span>`;
+    document.getElementById('proc-summary').textContent =
+      session.last_step_summary || '';
+    if (session.waiting_until && session.next_wakeup_reason) {
+      document.getElementById('proc-wake').textContent =
+        `Weckgrund: ${session.next_wakeup_reason}  |  Wacht auf: ${session.waiting_until}` +
+        (session.wakeup_condition
+          ? `  |  Bedingung: ${session.wakeup_condition.symbol}=${session.wakeup_condition.value}`
+          : '');
+    } else {
+      document.getElementById('proc-wake').textContent = '';
+    }
+  } else {
+    document.getElementById('proc-meta').innerHTML = '';
+    document.getElementById('proc-summary').textContent = '';
+    document.getElementById('proc-wake').textContent = '';
+  }
+
+  // Schrittprotokoll
+  const events = progress.steps || [];
+  if (events.length > renderedEventCount) {
+    const log = document.getElementById('steps-log');
+    for (let i = renderedEventCount; i < events.length; i++) {
+      log.appendChild(renderEvent(events[i]));
+    }
+    renderedEventCount = events.length;
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Ergebnis
+  if (!r.running && r.result) {
+    const res = r.result;
+    setMsg('command-msg',
+      `${res.ok ? '✓' : '✗'} ${res.message} | Zyklen: ${res.cycle_count ?? '-'} | Schritte: ${res.step_count ?? '-'} | Schreibvorgänge: ${res.write_count ?? '-'}`,
+      res.ok ? 'ok' : 'err'
+    );
+  }
+}
+
+function renderEvent(ev) {
+  const div = document.createElement('div');
+  const type = ev.event || '';
+  div.className = 'step-entry ' + (ev.status || type);
+
+  const labels = {
+    decision_received:    '🤖 KI-Entscheidung',
+    step_executed:        '✓ Schritt ausgeführt',
+    next_decision_pending:'→ Nächster Schritt',
+    wait:                 '⏳ Warten',
+    cycle_completed:      '🔄 Zyklus abgeschlossen',
+    fault_detected:       '⚠ Störung erkannt',
+    waiting_for_ack:      '⚠ Warte auf Quittierung',
+    fault_acknowledged:   '✓ Fehler quittiert',
+    fault_no_ack_signal:  '✗ Kein Quittierungssignal konfiguriert',
+  };
+
+  let hdr = labels[type] || type;
+  if (ev.step) hdr += ` (Schritt ${ev.step}${ev.cycle !== undefined ? ', Zyklus ' + ev.cycle : ''})`;
+  if (ev.cycle !== undefined && type === 'cycle_completed') hdr += ` — Zyklus ${ev.cycle}`;
+
+  let detail = '';
+  if (ev.decision) {
+    const d = ev.decision;
+    detail += `Entscheidung: <b>${d.decision}</b> | Konfidenz: ${d.confidence}`;
+    if (d.summary) detail += `<br>${escHtml(d.summary)}`;
+    if (d.requested_actions && d.requested_actions.length)
+      detail += `<br>Aktion: ${escHtml(d.requested_actions[0].symbol)} = ${JSON.stringify(d.requested_actions[0].value)}`;
+  }
+  if (ev.write) {
+    const w = ev.write;
+    detail += `<br>Schreiben: ${escHtml(w.symbol)} = ${JSON.stringify(w.requested)}`;
+    if (!w.write_ok) detail += ` <span style="color:var(--red)">FEHLER: ${escHtml(w.error)}</span>`;
+    else detail += ` → Rücklesen: ${JSON.stringify(w.actual)}`;
+  }
+  if (ev.seconds) detail += `<br>Wartezeit: ${ev.seconds}s`;
+  if (ev.ack_symbol) detail += `<br>Quittierungssignal: <b>${escHtml(ev.ack_symbol)}</b>`;
+  if (ev.message && !ev.decision) detail += escHtml(ev.message);
+
+  div.innerHTML = `<div class="step-hdr">${hdr}</div>` +
+    (detail ? `<div class="step-detail">${detail}</div>` : '');
+  return div;
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Variablen-Editor
+// ═══════════════════════════════════════════════════════════════════════════
+const ROLES = [
+  'sensor','actuator','feedback','state','mode',
+  'permission','interlock','fault_signal','fault_ack'
+];
+
+function renderVarsTable() {
+  const tbody = document.getElementById('vars-body');
+  tbody.innerHTML = '';
+  const existing = {};
+  if (machineConfig && machineConfig.symbols) {
+    machineConfig.symbols.forEach(s => { existing[s.symbol] = s; });
+  }
+  allSymbols.forEach(sym => {
+    const ex = existing[sym.name] || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" data-sym="${escHtml(sym.name)}" ${ex.symbol ? 'checked' : ''}></td>
+      <td style="font-family:monospace;font-size:11px">${escHtml(sym.name)}</td>
+      <td>${escHtml(sym.data_type)}</td>
+      <td><input type="text" data-field="description" value="${escHtml(ex.description||'')}"></td>
+      <td><select data-field="role">${ROLES.map(r=>`<option value="${r}"${ex.role===r?' selected':''}>${r}</option>`).join('')}</select></td>
+      <td><input type="checkbox" data-field="writable" ${ex.writable?'checked':''}></td>
+      <td><input type="text" data-field="allowed_values" value="${escHtml((ex.allowed_values||[]).join(','))}"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function selectAll(v) {
+  document.querySelectorAll('#vars-body input[type=checkbox][data-sym]')
+    .forEach(cb => cb.checked = v);
+}
+
+async function saveVarConfig() {
+  const rows = document.querySelectorAll('#vars-body tr');
+  const symbols = [];
+  rows.forEach(tr => {
+    const cb = tr.querySelector('input[data-sym]');
+    if (!cb || !cb.checked) return;
+    const sym = cb.dataset.sym;
+    const adsym = allSymbols.find(s => s.name === sym);
+    if (!adsym) return;
+    const desc = tr.querySelector('[data-field=description]').value;
+    const role = tr.querySelector('[data-field=role]').value;
+    const writable = tr.querySelector('[data-field=writable]').checked;
+    const avRaw = tr.querySelector('[data-field=allowed_values]').value.trim();
+    let allowed_values = null;
+    if (avRaw) {
+      try { allowed_values = avRaw.split(',').map(v => JSON.parse(v.trim())); }
+      catch { allowed_values = avRaw.split(',').map(v => v.trim()); }
+    }
+    const entry = {
+      symbol: sym, data_type: adsym.data_type,
+      role, description: desc, writable,
+    };
+    if (allowed_values) entry.allowed_values = allowed_values;
+    symbols.push(entry);
+  });
+
+  const current = machineConfig || {};
+  const updated = { ...current, symbols };
+  document.getElementById('machine-json').value = JSON.stringify(updated, null, 2);
+  const r = await api('/api/machine', 'POST', updated);
+  setMsg('vars-msg', r.ok ? 'Maschinenbeschreibung gespeichert.' : JSON.stringify(r),
+    r.ok ? 'ok' : 'err');
+  if (r.ok) machineConfig = r.machine;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Symbolübersicht
+// ═══════════════════════════════════════════════════════════════════════════
+function renderSymbolList() {
+  const el = document.getElementById('symbols-list');
+  if (!allSymbols.length) { el.textContent = 'Keine Symbole.'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>Symbol</th><th>Typ</th><th>Kommentar</th></tr></thead>
+    <tbody>${allSymbols.map(s =>
+      `<tr><td style="font-family:monospace">${escHtml(s.name)}</td>
+           <td>${escHtml(s.data_type)}</td>
+           <td style="color:var(--grey)">${escHtml(s.comment||'')}</td></tr>`
+    ).join('')}</tbody></table>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Snapshot
+// ═══════════════════════════════════════════════════════════════════════════
+function renderSnapshot(values) {
+  const grid = document.getElementById('snap-grid');
+  if (!values.length) { grid.innerHTML = '<div style="color:var(--grey);font-size:12px">Keine Werte.</div>'; return; }
+  grid.innerHTML = values.map(v => {
+    let valClass = '';
+    let display = v.valid ? JSON.stringify(v.value) : '—';
+    if (typeof v.value === 'boolean') {
+      valClass = v.value ? 'bool-true' : 'bool-false';
+      display = v.value ? 'TRUE' : 'FALSE';
+    }
+    const spec = machineConfig && machineConfig.symbols
+      ? machineConfig.symbols.find(s => s.symbol === v.symbol) : null;
+    return `<div class="snap-card">
+      <div class="snap-sym">${escHtml(v.symbol)}</div>
+      <div class="snap-val ${valClass}">${escHtml(display)}</div>
+      <div class="snap-role">${spec ? escHtml(spec.role||'') : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Globaler Zustand
+// ═══════════════════════════════════════════════════════════════════════════
+async function refreshState() {
+  const r = await api('/api/state');
+
+  // Statusleiste
+  const sbAds = document.getElementById('sb-ads');
+  sbAds.textContent = 'ADS: ' + (r.ads_connected ? 'verbunden' : 'getrennt');
+  sbAds.className = 'sb ' + (r.ads_connected ? 'ok' : 'err');
+
+  const sbWrite = document.getElementById('sb-write');
+  sbWrite.textContent = 'Schreibfreigabe: ' + (r.write_enabled ? 'EIN' : 'aus');
+  sbWrite.className = 'sb ' + (r.write_enabled ? 'ok' : '');
+
+  const sbJob = document.getElementById('sb-job');
+  sbJob.textContent = 'Auftrag: ' + (r.command_running ? 'läuft' : 'keiner');
+  sbJob.className = 'sb ' + (r.command_running ? 'ok' : '');
+
+  const sbMachine = document.getElementById('sb-machine');
+  const mn = r.machine && r.machine.machine_name;
+  sbMachine.textContent = 'Maschine: ' + (mn || 'unbekannt');
+  sbMachine.className = 'sb ' + (r.machine && r.machine.enabled ? 'ok' : '');
+
+  // Felder befüllen
+  if (r.ads && r.ads.host) document.getElementById('ads-host').value = r.ads.host;
+  if (r.ads && r.ads.ams_net_id) document.getElementById('ads-amsid').value = r.ads.ams_net_id;
+  if (r.ads && r.ads.port) document.getElementById('ads-port').value = r.ads.port;
+  if (r.llm && r.llm.base_url) document.getElementById('llm-url').value = r.llm.base_url;
+  if (r.llm && r.llm.model) document.getElementById('llm-model').value = r.llm.model;
+  document.getElementById('write-enable').checked = !!r.write_enabled;
+
+  if (r.machine) {
+    machineConfig = r.machine;
+    const mj = document.getElementById('machine-json');
+    if (!mj.value) mj.value = JSON.stringify(r.machine, null, 2);
+    const enabled = r.machine.enabled;
+    setMsg('machine-status',
+      (r.machine.machine_name || 'Maschine') + (enabled ? ' — aktiv' : ' — deaktiviert'),
+      enabled ? 'ok' : 'err'
+    );
+  }
+
+  // Laufenden Auftrag wiederherstellen
+  if (r.command_running && !pollInterval) {
+    document.getElementById('btn-stop').style.display = '';
+    document.getElementById('btn-start').disabled = true;
+    startPoll();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Start
+// ═══════════════════════════════════════════════════════════════════════════
+refreshState();
 </script>
 </body>
 </html>

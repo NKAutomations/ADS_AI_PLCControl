@@ -4,61 +4,63 @@
   "enabled": true,
   "min_confidence": 0.85,
   "max_response_age_seconds": 15,
-  "max_writes_per_minute": 10,
+  "max_writes_per_minute": 100,
   "symbols": [
     {
       "symbol": ".BAMPELANFORDERN",
       "data_type": "BOOL",
       "role": "sensor",
       "description": "grün anforderung",
-      "writable": false,
-      "allowed_values": null,
-      "expected_feedback": []
+      "writable": false
     },
     {
       "symbol": ".BAMPELERROR",
       "data_type": "BOOL",
       "role": "actuator",
       "description": "Fehler ausgang",
-      "writable": true,
-      "allowed_values": null,
-      "expected_feedback": []
+      "writable": true
     },
     {
       "symbol": ".BAMPELGELB",
       "data_type": "BOOL",
       "role": "actuator",
       "description": "Gelbe ampel",
-      "writable": true,
-      "allowed_values": null,
-      "expected_feedback": []
+      "writable": true
     },
     {
       "symbol": ".BAMPELGRUEN",
       "data_type": "BOOL",
       "role": "actuator",
       "description": "Grüne ampel",
-      "writable": true,
-      "allowed_values": null,
-      "expected_feedback": []
+      "writable": true
+    },
+    {
+      "symbol": ".BAMPELQUITERROR",
+      "data_type": "BOOL",
+      "role": "fault_ack",
+      "description": "Fehler quit eingang",
+      "writable": false
     },
     {
       "symbol": ".BAMPELROT",
       "data_type": "BOOL",
       "role": "actuator",
       "description": "Rote ampel",
-      "writable": true,
-      "allowed_values": null,
-      "expected_feedback": []
+      "writable": true
+    },
+    {
+      "symbol": ".BSICHERUNGF1",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "sicherung eingang",
+      "writable": false
     },
     {
       "symbol": ".BTEST",
       "data_type": "BOOL",
       "role": "actuator",
       "description": "Testfunktion ob schreiben geht",
-      "writable": true,
-      "allowed_values": null,
-      "expected_feedback": []
+      "writable": true
     }
   ],
   "execution": {
