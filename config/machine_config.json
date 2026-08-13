@@ -7,59 +7,66 @@
   "max_writes_per_minute": 100,
   "symbols": [
     {
-      "symbol": ".BAMPELANFORDERN",
+      "symbol": "GVL_AXIS.bEnabled",
       "data_type": "BOOL",
       "role": "sensor",
-      "description": "grün anforderung",
+      "description": "Freigabe gegeben",
       "writable": false
     },
     {
-      "symbol": ".BAMPELERROR",
-      "data_type": "BOOL",
-      "role": "actuator",
-      "description": "Fehler ausgang",
-      "writable": true
-    },
-    {
-      "symbol": ".BAMPELGELB",
-      "data_type": "BOOL",
-      "role": "actuator",
-      "description": "Gelbe ampel",
-      "writable": true
-    },
-    {
-      "symbol": ".BAMPELGRUEN",
-      "data_type": "BOOL",
-      "role": "actuator",
-      "description": "Grüne ampel",
-      "writable": true
-    },
-    {
-      "symbol": ".BAMPELQUITERROR",
-      "data_type": "BOOL",
-      "role": "fault_ack",
-      "description": "Fehler quit eingang",
-      "writable": false
-    },
-    {
-      "symbol": ".BAMPELROT",
-      "data_type": "BOOL",
-      "role": "actuator",
-      "description": "Rote ampel",
-      "writable": true
-    },
-    {
-      "symbol": ".BSICHERUNGF1",
+      "symbol": "GVL_AXIS.bError",
       "data_type": "BOOL",
       "role": "sensor",
-      "description": "sicherung eingang",
+      "description": "quittierung erforderlich ",
       "writable": false
     },
     {
-      "symbol": ".BTEST",
+      "symbol": "GVL_AXIS.bRunning",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "motor dreht",
+      "writable": false
+    },
+    {
+      "symbol": "GVL_AXIS.nMotorLeistung",
+      "data_type": "REAL",
+      "role": "sensor",
+      "description": "Nennleistung",
+      "writable": false
+    },
+    {
+      "symbol": "MAIN.bEnable",
       "data_type": "BOOL",
       "role": "actuator",
-      "description": "Testfunktion ob schreiben geht",
+      "description": "Regelung einschalten",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.bJogNeg",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "negativ drehen",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.bJogPos",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "positiv drehen",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.bResetErr",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "fehler quittierung",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.lrRpm",
+      "data_type": "LREAL",
+      "role": "actuator",
+      "description": "Drehzahlvorgabe",
       "writable": true
     }
   ],
