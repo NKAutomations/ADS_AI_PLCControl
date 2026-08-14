@@ -1,0 +1,80 @@
+{
+  "version": "0.1.0-poc",
+  "machine_name": "test",
+  "enabled": true,
+  "min_confidence": 0.85,
+  "max_response_age_seconds": 120,
+  "max_writes_per_minute": 100,
+  "symbols": [
+    {
+      "symbol": "GVL_AXIS.bEnabled",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "Freigabe gegeben",
+      "writable": false
+    },
+    {
+      "symbol": "GVL_AXIS.bError",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "quittierung erforderlich ",
+      "writable": false
+    },
+    {
+      "symbol": "GVL_AXIS.bRunning",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "motor dreht",
+      "writable": false
+    },
+    {
+      "symbol": "GVL_AXIS.nMotorLeistung",
+      "data_type": "REAL",
+      "role": "sensor",
+      "description": "Nennleistung",
+      "writable": false
+    },
+    {
+      "symbol": "MAIN.bEnable",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Regelung einschalten",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.bJogNeg",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "negativ drehen",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.bJogPos",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "positiv drehen",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.bResetErr",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "fehler quittierung Taster",
+      "writable": true
+    },
+    {
+      "symbol": "MAIN.lrRpm",
+      "data_type": "LREAL",
+      "role": "actuator",
+      "description": "Drehzahlvorgabe",
+      "writable": true
+    }
+  ],
+  "execution": {
+    "required_true": [],
+    "required_false": [],
+    "mode_symbol": null,
+    "allowed_modes": [],
+    "mode_values": {}
+  }
+}

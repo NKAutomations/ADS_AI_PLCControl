@@ -1,0 +1,124 @@
+{
+  "version": "0.1.1-poc-recovery",
+  "machine_name": "TwinCAT Motor POC",
+  "enabled": true,
+  "min_confidence": 0.85,
+  "max_response_age_seconds": 120,
+  "max_writes_per_minute": 30,
+  "symbols": [
+    {
+      "symbol": "GVL_AXIS.bEnabled",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "Freigabe gegeben",
+      "writable": false
+    },
+    {
+      "symbol": "GVL_AXIS.bError",
+      "data_type": "BOOL",
+      "role": "fault_signal",
+      "description": "Aktiver Motorfehler; true bedeutet Stoerung",
+      "writable": false
+    },
+    {
+      "symbol": "GVL_AXIS.bRunning",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "Motor dreht",
+      "writable": false
+    },
+    {
+      "symbol": "GVL_AXIS.nMotorLeistung",
+      "data_type": "REAL",
+      "role": "sensor",
+      "description": "Nennleistung",
+      "writable": false
+    },
+    {
+      "symbol": "MAIN.bEnable",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Regelung einschalten",
+      "writable": true,
+      "allowed_values": [true, false]
+    },
+    {
+      "symbol": "MAIN.bJogNeg",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Negativ drehen",
+      "writable": true,
+      "allowed_values": [true, false]
+    },
+    {
+      "symbol": "MAIN.bJogPos",
+      "data_type": "BOOL",
+      "role": "actuator",
+      "description": "Positiv drehen",
+      "writable": true,
+      "allowed_values": [true, false]
+    },
+    {
+      "symbol": "MAIN.bResetErr",
+      "data_type": "BOOL",
+      "role": "fault_ack",
+      "description": "Fehlerquittierung Taster",
+      "writable": true,
+      "allowed_values": [true, false],
+      "recovery": true,
+      "recovery_values": [true]
+    },
+    {
+      "symbol": "MAIN.lrRpm",
+      "data_type": "LREAL",
+      "role": "actuator",
+      "description": "Drehzahlvorgabe",
+      "writable": true,
+      "allowed_values": [0.0, 500.0, 1000.0, 1500.0]
+    }
+  ],
+  "fault_recovery": {
+    "fault_symbols": ["GVL_AXIS.bError"],
+    "pulse_hold_seconds": 0.0,
+    "actions": [
+      {
+        "action": {
+          "symbol": "MAIN.bResetErr",
+          "value": true,
+          "reason": "Aktiven Motorfehler mit dem konfigurierten Reset-Taster quittieren"
+        },
+        "expected_feedback": [
+          {
+            "symbol": "GVL_AXIS.bError",
+            "value": false,
+            "timeout_seconds": 5.0,
+            "poll_interval_seconds": 0.2
+          }
+        ]
+      }
+    ]
+  },
+  "execution": {
+    "required_true": [],
+    "required_false": ["GVL_AXIS.bError"],
+    "mode_symbol": null,
+    "allowed_modes": [],
+    "mode_values": {}
+  },
+  "agent": {
+    "loop_mode": false,
+    "max_cycles": 1,
+    "max_steps": 20,
+    "max_writes_per_job": 20,
+    "max_writes_per_minute": 10,
+    "job_timeout_seconds": 120.0,
+    "cycle_timeout_seconds": 120.0,
+    "max_wait_seconds": 5.0,
+    "max_identical_decisions": 5,
+    "max_identical_wait_decisions": 20,
+    "max_llm_retries": 3,
+    "max_prewrite_retries": 3,
+    "max_recovery_attempts": 3,
+    "prompt_history_entries": 8
+  }
+}
