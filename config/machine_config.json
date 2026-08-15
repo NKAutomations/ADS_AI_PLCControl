@@ -46,6 +46,13 @@
       ]
     },
     {
+      "symbol": "MAIN.bInitialisiert",
+      "data_type": "BOOL",
+      "role": "sensor",
+      "description": "",
+      "writable": false
+    },
+    {
       "symbol": "MAIN.bJogNeg",
       "data_type": "BOOL",
       "role": "actuator",
@@ -121,14 +128,14 @@
   "agent": {
     "loop_mode": false,
     "max_cycles": 1,
-    "max_steps": 20,
-    "max_writes_per_job": 20,
-    "max_writes_per_minute": 10,
+    "max_steps": 2000,
+    "max_writes_per_job": 2000,
+    "max_writes_per_minute": 1000,
     "job_timeout_seconds": 120,
     "cycle_timeout_seconds": 120,
-    "max_wait_seconds": 5,
+    "max_wait_seconds": 1,
     "max_identical_decisions": 5,
-    "max_identical_wait_decisions": 20,
+    "max_identical_wait_decisions": 40,
     "max_llm_retries": 3,
     "max_prewrite_retries": 3,
     "max_recovery_attempts": 3,
