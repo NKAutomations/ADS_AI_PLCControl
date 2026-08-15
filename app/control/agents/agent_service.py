@@ -60,7 +60,7 @@ DEFAULT_LIMITS: dict[str, Any] = {
     "ack_timeout_seconds":    120.0,   # Wartezeit auf Fehlerquittierung
     "ack_poll_interval":      0.2,
     # Anzahl komprimierter History-Eintraege im Prompt
-    "prompt_history_entries": 5,
+    "prompt_history_entries": 3,
     # Begrenzte Wiederholung bei formal ungueltigen LLM-Antworten.
     # Dabei wird niemals geschrieben.
     "max_llm_retries":        0,
@@ -202,19 +202,15 @@ Verhalten nach einer abgelehnten LLM-Antwort:
 
 Verhalten nach einer abgelehnten Aktion:
 - Wenn previous_steps einen Eintrag mit event=action_rejected enthaelt, lies den aktuellen SPS-Snapshot erneut.
-- Bewerte die Aktion anhand des aktuellen SPS-Snapshots erneut. Eine zuvor
-  abgelehnte oder ausgefuehrte Aktion ist nicht dauerhaft ausgeschlossen und
-  darf nach einer neuen Zustandsbewertung erneut angefordert werden.
-- Fordere weiterhin nur eine eindeutig konfigurierte Aktion an.
-- Wenn eine andere Hypothese sinnvoller ist, darfst du diese ebenfalls untersuchen. Bei aktiver Stoerung darfst du nach der Neubewertung jeden konfigurierten Aktor als Hypothese versuchen.
+- Wiederhole nicht dieselbe abgelehnte Aktion unveraendert.
+- Fordere nur eine korrigierte, eindeutig konfigurierte Aktion an.
+- Wenn keine zulaessige naechste Hypothese moeglich ist, verwende wait, blocked oder unclear. Bei aktiver Stoerung darfst du nach der Neubewertung auch einen anderen konfigurierten Aktor als Hypothese versuchen.
 
 Experimenteller Recovery-Modus:
 - Ein abgelehnter Schritt beendet den Auftrag nicht automatisch.
 - Bewerte nach jeder Ablehnung den neuen realen SPS-Snapshot.
 - Untersuche alternative bereits konfigurierte Aktionen, Reihenfolgen und Wartezustaende.
-- Keine Aktion wird aufgrund ihrer bisherigen Verwendung dauerhaft ausgeschlossen.
-  Wiederhole eine identische Aktion nur als neue Hypothese auf Basis des aktuellen
-  SPS-Zustands; alternative Aktionen duerfen ebenfalls untersucht werden.
+- Wiederhole eine identische Aktion nicht blind; begruende eine neue Hypothese aus dem aktuellen Zustand.
 - Bei fehlender Freigabe oder aktiver Verriegelung darfst du diese niemals umgehen. Eine aktive fault_signal-Bedingung allein verhindert die experimentelle Aktorhypothese jedoch nicht; nur sie darf nach der Neubewertung aus den erforderlichen Bedingungen ausgenommen werden.
 - blocked, unclear und fault sind Zwischenzustandsbewertungen. Beende den Auftrag nicht nur deshalb.
 
@@ -340,10 +336,9 @@ class AgentControlService:
         self.history: list[dict[str, Any]] = []
         self.job_id = ""
         self.session: ProcessSession | None = None
-        # Per-Auftrag-Historie fuer Diagnose und Prompt-Kontext.
-        # Sie dient nur der Nachvollziehbarkeit. Keine Aktion wird daraus
-        # dauerhaft ausgeschlossen; nach jedem neuen SPS-Snapshot darf auch
-        # dieselbe Hypothese erneut untersucht werden.
+        # Per-Auftrag-Historie ausgefuehrter/abgelehnter Aktionshypothesen.
+        # Sie verhindert blindes Wiederholen, ohne die KI auf einen festen
+        # Ablauf festzulegen.
         self._attempted_actions: set[str] = set()
         self._rejected_actions: set[str] = set()
 
@@ -417,10 +412,8 @@ class AgentControlService:
                 sorted(self._attempted_actions | self._rejected_actions),
                 ensure_ascii=False,
             )
-            + ". Diese Historie ist nur Information: Keine Aktion ist dauerhaft "
-              "ausgeschlossen. Wiederhole eine Hypothese nach einer neuen "
-              "Zustandsbewertung, wenn sie weiterhin plausibel ist, oder untersuche "
-              "alternativ eine andere konfigurierte Aktion."
+            + ". Waehle eine andere konfigurierte Aktion, eine andere Reihenfolge "
+              "oder einen begruendeten Wartezustand."
         )
 
     def _recovery_pause(self, limits: dict[str, Any]) -> None:
@@ -859,8 +852,7 @@ class AgentControlService:
                     spec is not None
                     and spec.get("writable") is True
                     and self._is_configured_recovery_action(symbol, value)
-                    # Bereits ausgefuehrte oder abgelehnte Aktionen duerfen
-                    # nach einem neuen SPS-Snapshot erneut untersucht werden.
+                    and not self._action_is_known_attempt({"symbol": symbol, "value": value})
                 ):
                     return {
                         "symbol": symbol,
@@ -885,8 +877,7 @@ class AgentControlService:
                 continue
             if (
                 any(_same_value(True, value) for value in values)
-                # Auch ein bereits verwendeter fault_ack-Impuls darf
-                # nach einer erneuten Zustandsbewertung wiederholt werden.
+                and not self._action_is_known_attempt({"symbol": symbol, "value": True})
             ):
                 return {
                     "symbol": symbol,
@@ -1697,10 +1688,14 @@ class AgentControlService:
                     ),
                 )
                 action_candidate = response.get("requested_actions", [{}])[0]
-                # Keine globale Wiederholsperre: Eine bereits ausgefuehrte
-                # oder abgelehnte Aktion darf nach dem frischen Snapshot erneut
-                # versucht werden. Die deterministischen Validierungen oberhalb
-                # bleiben bei jedem einzelnen Schreibvorgang aktiv.
+                if (
+                    isinstance(action_candidate, dict)
+                    and self._action_is_known_attempt(action_candidate)
+                ):
+                    validation_errors.append(
+                        "Identische Aktionshypothese wurde bereits untersucht; "
+                        "eine alternative konfigurierte Aktion ist erforderlich"
+                    )
                 if validation_errors:
                     step["status"] = "action_rejected"
                     step["errors"] = validation_errors

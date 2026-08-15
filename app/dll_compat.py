@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 _PATCHED = False
+_PATH_PREPARED = False
 _ORIGINAL_ADD_DLL_DIRECTORY = None
 
 
@@ -53,18 +54,39 @@ def find_ads_dll_directory() -> Optional[Path]:
 def prepare_pyads_import() -> Optional[Path]:
     """Bereitet den pyads-Import vor und gibt das DLL-Verzeichnis zurück."""
 
-    global _PATCHED, _ORIGINAL_ADD_DLL_DIRECTORY
+    global _PATCHED, _PATH_PREPARED, _ORIGINAL_ADD_DLL_DIRECTORY
 
     real_directory = find_ads_dll_directory()
     if real_directory is None:
         return None
 
-    # DLL-Suchpfad für ctypes und Windows ergänzen.
-    os.environ["PATH"] = (
-        str(real_directory)
-        + os.pathsep
-        + os.environ.get("PATH", "")
-    )
+    # Den TwinCAT-Pfad höchstens einmal in PATH eintragen. Die bisherige
+    # Version hat diesen Pfad bei jedem ADS-Lesezugriff erneut vorangestellt.
+    # Dadurch ist PATH unter Windows immer weiter gewachsen und konnte die
+    # Grenze von 32767 Zeichen überschreiten.
+    if not _PATH_PREPARED:
+        real_path = os.path.normcase(os.path.normpath(str(real_directory)))
+        current_path = os.environ.get("PATH", "")
+        entries = current_path.split(os.pathsep) if current_path else []
+
+        # Bereits vorhandene identische Einträge entfernen. Andere PATH-
+        # Einträge bleiben in ihrer bisherigen Reihenfolge erhalten.
+        filtered_entries = []
+        seen_real_path = False
+        for entry in entries:
+            normalized_entry = os.path.normcase(os.path.normpath(entry))
+            if normalized_entry == real_path:
+                if not seen_real_path:
+                    filtered_entries.append(str(real_directory))
+                    seen_real_path = True
+                continue
+            filtered_entries.append(entry)
+
+        if not seen_real_path:
+            filtered_entries.insert(0, str(real_directory))
+
+        os.environ["PATH"] = os.pathsep.join(filtered_entries)
+        _PATH_PREPARED = True
 
     # pyads 3.2.2 ruft unter Windows os.add_dll_directory() mit dem alten
     # AdsApi-Pfad auf. Nur diesen nicht vorhandenen Pfad umleiten.

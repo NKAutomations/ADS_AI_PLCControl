@@ -22,9 +22,6 @@ Fixes (2026-08-15):
     Abschlussbedingungen werden als neue Hypothese behandelt
   - 0 bedeutet bei Prozess-/Retry-Limits unbegrenzt; der Bediener kann den
     Auftrag jederzeit ueber ProcessSession.stop_requested stoppen
-  - Nach einer Fehlerneubewertung darf jeder konfigurierte, schreibbare
-    Aktor als einzelne Hypothese untersucht werden; recovery=true oder
-    fault_recovery.actions sind nicht erforderlich
   - Schreibfreigabe, Whitelist, Datentyppruefung, Ruecklesen und Feedback-
     pruefung bleiben fuer jeden einzelnen Schreibvorgang aktiv
 """
@@ -60,7 +57,7 @@ DEFAULT_LIMITS: dict[str, Any] = {
     "ack_timeout_seconds":    120.0,   # Wartezeit auf Fehlerquittierung
     "ack_poll_interval":      0.2,
     # Anzahl komprimierter History-Eintraege im Prompt
-    "prompt_history_entries": 5,
+    "prompt_history_entries": 3,
     # Begrenzte Wiederholung bei formal ungueltigen LLM-Antworten.
     # Dabei wird niemals geschrieben.
     "max_llm_retries":        0,
@@ -103,7 +100,7 @@ Erlaubte Entscheidungen sind ausschliesslich:
 - fault
 - unclear
 
-Verwende niemals retry, error oder einen anderen nicht aufgefuehrten decision-Wert. Verwende recover bei einer aktiven Stoerung, wenn die angeforderte Aktion als Mitigations- oder Wiederanlaufhypothese gedacht ist. Eine separate Recovery-Konfiguration ist dafuer nicht erforderlich.
+Verwende niemals retry, error oder einen anderen nicht aufgefuehrten decision-Wert. Verwende recover nur bei einer aktiven, konfigurierten Stoerung und einer exakt konfigurierten Recovery-Aktion.
 
 Rollen der Maschinenbeschreibung:
 
@@ -136,31 +133,31 @@ interlock:
 
 fault_signal:
 - Fehler- oder Stoerungssignal.
-- Ein aktiver Fehler ist ein Diagnose- und Explorationszustand, aber kein generelles Schreibverbot.
-- Nach einer erneuten Zustandsbewertung darf eine einzelne, konfigurierte und schreibbare Aktoraktion als Hypothese angefordert werden.
-- Nur die konfigurierte fault_signal-Bedingung darf dabei fuer diese Hypothese ignoriert werden; Freigaben, Betriebsarten, andere Verriegelungen und alle technischen Pruefungen bleiben verbindlich.
+- Bei aktivem Fehler darf keine normale Prozessaktion angefordert werden.
 
 fault_ack:
-- Optionales Fehlerquittigungs- oder Rueckmeldesignal.
-- Eine fault_ack- oder recovery-Markierung ist nicht erforderlich, damit die KI eine Fehlerbehebung untersucht.
-- Ist ein schreibbares fault_ack-Symbol vorhanden und wird es als Quittierungshypothese gewaehlt, fuehrt die Anwendung den Impuls deterministisch als TRUE und danach zwingend FALSE aus.
-- Erfinde niemals ein Quittierungssymbol; verwende nur beschriebene, schreibbare Symbole.
+- Fehlerquittigungs- oder Rueckmeldesignal.
+- Wenn es in der Maschinenbeschreibung writable=true ist, darf es ausschliesslich als konfigurierte Recovery-Aktion verwendet werden.
+- Die Anwendung fuehrt den Recovery-Impuls deterministisch als TRUE und danach zwingend FALSE aus.
+- Du darfst ein fault_ack-Symbol niemals als normale Prozessaktion beschreiben.
+- Die Anwendung behandelt die Fehlerquittierung separat.
+- Erfinde niemals ein Quittierungssymbol.
 
 Entscheidungen:
 
 recover:
-- Eine aktive Stoerung liegt vor und die Aktion ist eine Hypothese zur Fehlerbehebung oder zum Wiederanlauf.
-- Eine separate Recovery-Funktion, recovery=true oder fault_recovery.actions ist nicht erforderlich.
-- requested_actions muss genau eine konfigurierte, schreibbare Aktion enthalten; dies darf ein normaler Aktor oder ein optionales fault_ack-Signal sein.
-- Pro Antwort wird nur eine Hypothese versucht. Alternative Aktoren und Reihenfolgen werden erst nach einem neuen SPS-Snapshot untersucht.
+- Eine aktive Stoerung liegt vor.
+- Die Maschinenbeschreibung enthaelt eine passende, ausdruecklich freigegebene Recovery-Aktion.
+- requested_actions muss genau diese eine Recovery-Aktion enthalten.
+- Fordere keine normale Prozessaktion zusammen mit der Recovery-Aktion an.
 - Behaupte erst nach einem neuen SPS-Snapshot, dass die Stoerung beseitigt ist.
 
 continue:
 - Der unmittelbar naechste Schritt ist eindeutig.
 - requested_actions muss genau eine Aktion enthalten.
-- Die Aktion muss aus der Maschinenbeschreibung stammen und schreibbar sein.
-- Bei aktiver Stoerung darf continue nach einer Zustandsbewertung eine einzelne Aktoraktion als Experimenthypothese anfordern.
-- Fehlende Freigaben, aktive Verriegelungen und widerspruechliche oder ungueltige Snapshots bleiben Schreibblockaden.
+- Die Aktion muss aus der Maschinenbeschreibung stammen.
+- Die Aktion muss zu einem schreibbaren actuator gehoeren.
+- Bei aktiver Stoerung, fehlender Freigabe, aktiver Verriegelung oder widerspruechlichem Zustand darf continue nicht verwendet werden.
 
 completed:
 - Der Benutzerauftrag ist vollstaendig erfuellt.
@@ -202,20 +199,16 @@ Verhalten nach einer abgelehnten LLM-Antwort:
 
 Verhalten nach einer abgelehnten Aktion:
 - Wenn previous_steps einen Eintrag mit event=action_rejected enthaelt, lies den aktuellen SPS-Snapshot erneut.
-- Bewerte die Aktion anhand des aktuellen SPS-Snapshots erneut. Eine zuvor
-  abgelehnte oder ausgefuehrte Aktion ist nicht dauerhaft ausgeschlossen und
-  darf nach einer neuen Zustandsbewertung erneut angefordert werden.
-- Fordere weiterhin nur eine eindeutig konfigurierte Aktion an.
-- Wenn eine andere Hypothese sinnvoller ist, darfst du diese ebenfalls untersuchen. Bei aktiver Stoerung darfst du nach der Neubewertung jeden konfigurierten Aktor als Hypothese versuchen.
+- Wiederhole nicht dieselbe abgelehnte Aktion unveraendert.
+- Fordere nur eine korrigierte, eindeutig konfigurierte Aktion an.
+- Wenn keine sichere korrigierte Aktion moeglich ist, verwende wait, blocked oder unclear.
 
 Experimenteller Recovery-Modus:
 - Ein abgelehnter Schritt beendet den Auftrag nicht automatisch.
 - Bewerte nach jeder Ablehnung den neuen realen SPS-Snapshot.
 - Untersuche alternative bereits konfigurierte Aktionen, Reihenfolgen und Wartezustaende.
-- Keine Aktion wird aufgrund ihrer bisherigen Verwendung dauerhaft ausgeschlossen.
-  Wiederhole eine identische Aktion nur als neue Hypothese auf Basis des aktuellen
-  SPS-Zustands; alternative Aktionen duerfen ebenfalls untersucht werden.
-- Bei fehlender Freigabe oder aktiver Verriegelung darfst du diese niemals umgehen. Eine aktive fault_signal-Bedingung allein verhindert die experimentelle Aktorhypothese jedoch nicht; nur sie darf nach der Neubewertung aus den erforderlichen Bedingungen ausgenommen werden.
+- Wiederhole eine identische Aktion nicht blind; begruende eine neue Hypothese aus dem aktuellen Zustand.
+- Bei fehlender Freigabe oder aktiver Verriegelung darfst du diese niemals umgehen. Warte, quittiere nur eine konfigurierte Stoerung oder suche einen anderen sicheren naechsten Schritt.
 - blocked, unclear und fault sind Zwischenzustandsbewertungen. Beende den Auftrag nicht nur deshalb.
 
 Verhalten nach einem ADS-, Ruecklese- oder Feedbackfehler:
@@ -227,10 +220,10 @@ Verhalten nach einem ADS-, Ruecklese- oder Feedbackfehler:
 - Sicherheits- und Ausfuehrungsfehler duerfen nicht durch blindes Weiterarbeiten umgangen werden.
 
 Verhalten bei einer aktiven Stoerung:
-- Bewerte zuerst den aktuellen realen SPS-Snapshot. fault ohne Schreibaktion ist eine moegliche Diagnoseantwort, aber kein Endzustand und kein dauerhaftes Schreibverbot.
-- Eine schreibbare fault_ack-Aktion kann automatisch als TRUE->FALSE-Impuls verwendet werden, wenn sie konfiguriert ist; sie ist optional und nicht Voraussetzung fuer weitere Exploration.
-- Nach jedem Versuch wird der reale SPS-Snapshot erneut gelesen.
-- Bleibt der Fehlermerker aktiv, darf die KI eine andere konfigurierte, schreibbare Aktoraktion als naechste Hypothese waehlen. Dabei werden nur die konfigurierten fault_signal-Bedingungen ausgenommen; Freigaben, Betriebsarten, andere Verriegelungen, Whitelist, Datentyp, Ruecklesen, Feedback und Stoppsignale bleiben zwingend.
+- Verwende fault und fordere keine Schreibaktion an.
+- Wenn eine schreibbare, konfigurierte fault_ack-Aktion vorhanden ist, fuehrt die Anwendung diese automatisch als TRUE->FALSE-Impuls aus. Nur wenn keine solche Aktion vorhanden ist, darf die Anwendung auf ein externes Quittierungssignal warten.
+- Nach einer Quittierung wirst du mit einem neuen realen SPS-Snapshot aufgerufen.
+- Wenn der Fehlermerker noch aktiv ist, darfst du nach der Neubewertung alternative bereits konfigurierte Aktoraktionen untersuchen; die Anwendung ignoriert nur diesen konfigurierten fault_signal, nicht Freigaben oder andere Verriegelungen.
 
 Konfidenz:
 - confidence muss zwischen 0.0 und 1.0 liegen.
@@ -340,10 +333,9 @@ class AgentControlService:
         self.history: list[dict[str, Any]] = []
         self.job_id = ""
         self.session: ProcessSession | None = None
-        # Per-Auftrag-Historie fuer Diagnose und Prompt-Kontext.
-        # Sie dient nur der Nachvollziehbarkeit. Keine Aktion wird daraus
-        # dauerhaft ausgeschlossen; nach jedem neuen SPS-Snapshot darf auch
-        # dieselbe Hypothese erneut untersucht werden.
+        # Per-Auftrag-Historie ausgefuehrter/abgelehnter Aktionshypothesen.
+        # Sie verhindert blindes Wiederholen, ohne die KI auf einen festen
+        # Ablauf festzulegen.
         self._attempted_actions: set[str] = set()
         self._rejected_actions: set[str] = set()
 
@@ -417,10 +409,8 @@ class AgentControlService:
                 sorted(self._attempted_actions | self._rejected_actions),
                 ensure_ascii=False,
             )
-            + ". Diese Historie ist nur Information: Keine Aktion ist dauerhaft "
-              "ausgeschlossen. Wiederhole eine Hypothese nach einer neuen "
-              "Zustandsbewertung, wenn sie weiterhin plausibel ist, oder untersuche "
-              "alternativ eine andere konfigurierte Aktion."
+            + ". Waehle eine andere konfigurierte Aktion, eine andere Reihenfolge "
+              "oder einen begruendeten Wartezustand."
         )
 
     def _recovery_pause(self, limits: dict[str, Any]) -> None:
@@ -859,8 +849,7 @@ class AgentControlService:
                     spec is not None
                     and spec.get("writable") is True
                     and self._is_configured_recovery_action(symbol, value)
-                    # Bereits ausgefuehrte oder abgelehnte Aktionen duerfen
-                    # nach einem neuen SPS-Snapshot erneut untersucht werden.
+                    and not self._action_is_known_attempt({"symbol": symbol, "value": value})
                 ):
                     return {
                         "symbol": symbol,
@@ -885,8 +874,7 @@ class AgentControlService:
                 continue
             if (
                 any(_same_value(True, value) for value in values)
-                # Auch ein bereits verwendeter fault_ack-Impuls darf
-                # nach einer erneuten Zustandsbewertung wiederholt werden.
+                and not self._action_is_known_attempt({"symbol": symbol, "value": True})
             ):
                 return {
                     "symbol": symbol,
@@ -998,11 +986,13 @@ class AgentControlService:
 
         if not current_write_enabled:
             errors.append("Schreibmodus ist in der Weboberflaeche nicht freigegeben")
-        # Im Experimentmodus ist keine separate Recovery-Markierung noetig.
-        # Jede konfigurierte, schreibbare Aktoraktion darf als Hypothese
-        # untersucht werden. fault_ack bleibt als optionale Sonderrolle
-        # zulaessig und wird bei einer Quittierung weiterhin als Impuls behandelt.
-        recovery_role_allowed = spec.get("role") in {"actuator", None, "fault_ack"}
+        recovery_role_allowed = (
+            spec.get("role") in {"actuator", None}
+            or (
+                response.get("decision") == "recover"
+                and spec.get("role") == "fault_ack"
+            )
+        )
         if spec.get("writable") is not True or not recovery_role_allowed:
             errors.append(f"Symbol nicht als schreibbarer Aktor oder Recovery-Signal freigegeben: {symbol}")
         if not current.get(symbol, {}).get("valid"):
@@ -1012,6 +1002,8 @@ class AgentControlService:
         if response.get("decision") == "recover":
             if not self._fault_is_active(current, action):
                 errors.append("Keine konfigurierte aktive Stoerung im aktuellen SPS-Snapshot")
+            if not self._is_configured_recovery_action(symbol, action["value"]):
+                errors.append(f"Recovery-Aktion nicht konfiguriert: {symbol}")
         allowed = spec.get("allowed_values")
         if allowed and not any(_same_value(action["value"], x) for x in allowed):
             errors.append(f"Wert nicht erlaubt: {symbol}")
@@ -1094,13 +1086,11 @@ class AgentControlService:
         if not read_ok or not _same_value(actual, True):
             return False, "Ruecklesen des gesetzten Reset-Impulses fehlgeschlagen", pulse
 
-        # Fehlerquittierung: TRUE bleibt standardmaessig 500 ms aktiv.
-        # Die Maschinenbeschreibung darf diesen Wert weiterhin mit
-        # fault_recovery.pulse_hold_seconds ueberschreiben.
+        # Optional kurze Haltezeit aus der Konfiguration; Standard 0 Sekunden.
         recovery = self.machine.get("fault_recovery", {})
-        hold_seconds = 0.5
+        hold_seconds = 0.0
         if isinstance(recovery, dict):
-            hold_seconds = float(recovery.get("pulse_hold_seconds", 0.5) or 0.5)
+            hold_seconds = float(recovery.get("pulse_hold_seconds", 0.0) or 0.0)
         if hold_seconds > 0:
             self.sleep(min(hold_seconds, float(limits["max_wait_seconds"])))
 
@@ -1265,13 +1255,6 @@ class AgentControlService:
         steps: list[dict[str, Any]] = []
         writes_this_cycle = 0
 
-        # Aktive Fehler sind im Experimentmodus kein globales Schreibverbot.
-        # Sobald der Snapshot einen konfigurierten fault_signal zeigt, darf die
-        # KI nach der Bewertung auch normale Aktoren als Hypothese untersuchen.
-        # _execution_conditions nimmt dabei ausschliesslich fault_signal aus,
-        # niemals Freigaben oder andere Verriegelungen.
-        fault_exploration_enabled = False
-
         # Separate Zaehler fuer Wiederholungserkennung
         repeated: dict[str, int] = {}       # fuer continue/completed/blocked/etc.
         wait_repeated: dict[str, int] = {}  # fuer wait (eigenes, hoeheres Limit)
@@ -1281,7 +1264,6 @@ class AgentControlService:
         recovery_attempts = 0
 
         snapshot, errors = self._snapshot()
-        fault_exploration_enabled = self._fault_is_active(snapshot)
         if errors:
             self._emit({
                 "event": "snapshot_retry",
@@ -1551,10 +1533,6 @@ class AgentControlService:
                     "errors": step["errors"],
                     "message": "Stoerung erkannt; SPS-Zustand wird erneut gelesen und ein alternativer Weg gesucht.",
                 })
-                # Nach der ersten Fehlerbewertung ist die experimentelle
-                # Aktorerkundung explizit freigeschaltet. Eine separate
-                # Recovery-Konfiguration ist dafuer nicht erforderlich.
-                fault_exploration_enabled = True
                 snapshot, snap_errors = self._refresh_snapshot_for_recovery(
                     snapshot, limits, response["summary"]
                 )
@@ -1692,15 +1670,17 @@ class AgentControlService:
                     write_enabled,
                     limits,
                     session,
-                    allow_active_fault_exploration=(
-                        fault_exploration_enabled or recovery_attempts > 0
-                    ),
+                    allow_active_fault_exploration=(recovery_attempts > 0),
                 )
                 action_candidate = response.get("requested_actions", [{}])[0]
-                # Keine globale Wiederholsperre: Eine bereits ausgefuehrte
-                # oder abgelehnte Aktion darf nach dem frischen Snapshot erneut
-                # versucht werden. Die deterministischen Validierungen oberhalb
-                # bleiben bei jedem einzelnen Schreibvorgang aktiv.
+                if (
+                    isinstance(action_candidate, dict)
+                    and self._action_is_known_attempt(action_candidate)
+                ):
+                    validation_errors.append(
+                        "Identische Aktionshypothese wurde bereits untersucht; "
+                        "eine alternative konfigurierte Aktion ist erforderlich"
+                    )
                 if validation_errors:
                     step["status"] = "action_rejected"
                     step["errors"] = validation_errors
@@ -1938,10 +1918,6 @@ class AgentControlService:
                 if response.get("decision") == "recover":
                     if not self._fault_is_active(snapshot):
                         recovery_attempts = 0
-                    else:
-                        # Fehler bleibt aktiv: weitere Hypothesen duerfen
-                        # nach dem frischen Snapshot folgen.
-                        fault_exploration_enabled = True
 
                 self._emit({
                     "event":          "step_executed",
@@ -2068,11 +2044,10 @@ class AgentControlService:
                     "cycle":   session.cycle_count,
                     "message": cycle_result["message"],
                 })
-                # Dieser Fallback bleibt nur fuer einen echten externen
-                # Quittierungs-Workflow erhalten. Im Experimentmodus beendet
-                # eine aktive Stoerung den Auftrag nicht automatisch; _run_cycle
-                # bewertet fault weiter und kann schreibbare Aktoren als
-                # Hypothesen untersuchen.
+                # Dieser Fallback wird nur erreicht, wenn keine explizit
+                # konfigurierte Recovery-Aktion vorhanden ist. Bei MAIN.bResetErr
+                # als fault_ack sollte _run_cycle vorher automatisch recover
+                # ausgefuehrt haben.
                 ack_result = self._handle_fault_and_wait_ack(session, limits)
 
                 if ack_result == "stopped":

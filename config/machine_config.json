@@ -31,7 +31,7 @@
       "symbol": "GVL_AXIS.nMotorLeistung",
       "data_type": "REAL",
       "role": "sensor",
-      "description": "Nennleistung",
+      "description": "aktuelle auslastung des Motors (kW)",
       "writable": false
     },
     {
