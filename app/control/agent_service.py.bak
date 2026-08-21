@@ -69,7 +69,7 @@ DEFAULT_LIMITS: dict[str, Any] = {
     # Begrenzte automatische Recovery-Versuche pro Auftrag.
     "max_recovery_attempts":  0,
     "persistent_recovery_mode": True,
-    "recovery_poll_seconds":  1.0,
+    "recovery_poll_seconds":  0.2,
 }
 
 DECISIONS = {"continue", "recover", "completed", "wait", "blocked", "fault", "unclear"}

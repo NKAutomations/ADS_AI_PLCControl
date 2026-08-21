@@ -24,7 +24,7 @@
       "symbol": "GVL_AXIS.bRunning",
       "data_type": "BOOL",
       "role": "sensor",
-      "description": "Motor dreht",
+      "description": "Motor dreht wirklich grade",
       "writable": false
     },
     {
@@ -38,7 +38,7 @@
       "symbol": "MAIN.bEnable",
       "data_type": "BOOL",
       "role": "actuator",
-      "description": "Regelung einschalten",
+      "description": "Regelung einschalte (Bedeutet nicht dass der motor dreht)",
       "writable": true,
       "allowed_values": [
         true,
@@ -56,7 +56,7 @@
       "symbol": "MAIN.bJogNeg",
       "data_type": "BOOL",
       "role": "actuator",
-      "description": "Negativ drehen",
+      "description": "Negative drehrichtung vorwählen (Positiv muss vorher false sein)",
       "writable": true,
       "allowed_values": [
         true,
@@ -67,7 +67,7 @@
       "symbol": "MAIN.bJogPos",
       "data_type": "BOOL",
       "role": "actuator",
-      "description": "Positiv drehen",
+      "description": "Positiv  drehrichtung vorwählen (Negativ muss vorher false sein)",
       "writable": true,
       "allowed_values": [
         true,
@@ -89,7 +89,7 @@
       "symbol": "MAIN.lrRpm",
       "data_type": "LREAL",
       "role": "actuator",
-      "description": "Drehzahlvorgabe",
+      "description": "Drehzahlvorgabe (Darf nicht größer als 3000 sein!)",
       "writable": true
     }
   ],
@@ -133,12 +133,12 @@
     "max_writes_per_minute": 1000,
     "job_timeout_seconds": 120,
     "cycle_timeout_seconds": 120,
-    "max_wait_seconds": 1,
-    "max_identical_decisions": 5,
-    "max_identical_wait_decisions": 40,
+    "max_wait_seconds": 0.5,
+    "max_identical_decisions": 3,
+    "max_identical_wait_decisions": 5,
     "max_llm_retries": 3,
     "max_prewrite_retries": 3,
     "max_recovery_attempts": 3,
-    "prompt_history_entries": 8
+    "prompt_history_entries": 10
   }
 }

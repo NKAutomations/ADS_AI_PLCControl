@@ -60,7 +60,7 @@ DEFAULT_LIMITS: dict[str, Any] = {
     "ack_timeout_seconds":    120.0,   # Wartezeit auf Fehlerquittierung
     "ack_poll_interval":      0.2,
     # Anzahl komprimierter History-Eintraege im Prompt
-    "prompt_history_entries": 5,
+    "prompt_history_entries": 10,
     # Begrenzte Wiederholung bei formal ungueltigen LLM-Antworten.
     # Dabei wird niemals geschrieben.
     "max_llm_retries":        0,
